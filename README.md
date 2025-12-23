@@ -9,7 +9,7 @@
 ---
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/github/explore/main/topics/exif/exif.png" width="120" alt="EXIF Icon"/>
+  <img src=".github/assets/chronoclean-logo.png" width="320" alt="ChronoClean Logo">
 </p>
 
 <h2 align="center">Restore Time. Restore Order.</h2>
