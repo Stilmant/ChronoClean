@@ -1,0 +1,80 @@
+# ChronoClean default configuration
+version: 1.0
+
+general:
+  timezone: "local"
+  recursive: true
+  include_videos: true
+  ignore_hidden_files: true
+  dry_run_default: true
+  output_folder: ".chronoclean"
+
+paths:
+  source: "/volume1/photos_inbox"
+  destination: "/volume1/photos_sorted"
+  temp_folder: "/volume1/@tmp/chronoclean"
+
+sorting:
+  folder_structure: "YYYY/MM/DD"
+  fallback_date_priority: ["exif", "filesystem", "folder_name", "heuristic"]
+  heuristic:
+    enabled: true
+    max_days_from_cluster: 2
+
+folder_tags:
+  enabled: false
+  tag_format: "{tag}"
+  min_length: 3
+  max_length: 40
+  ignore_list: ["tosort", "unsorted", "misc", "backup", "temp", "tmp", "download", "downloads", "DCIM"]
+  force_list: []
+  auto_detect: true
+  distance_check: true
+  distance_threshold: 0.75
+
+renaming:
+  enabled: false
+  pattern: "{date}_{time}{tag_part}"
+  date_format: "%Y%m%d"
+  time_format: "%H%M%S"
+  lowercase_extensions: true
+  keep_original_if_conflict: true
+
+duplicates:
+  policy: "safe"
+  hashing_algorithm: "sha256"
+  consider_resolution: true
+  consider_metadata: true
+
+export:
+  format: "both"
+  include_tags: true
+  include_duplicates: true
+  include_heuristics: true
+  pretty: true
+  output_path: ".chronoclean/plan"
+
+dry_run:
+  show_moves: true
+  show_renames: true
+  show_tags: true
+  show_duplicates: true
+  summary_only: false
+
+logging:
+  level: "info"
+  color_output: true
+  log_to_file: true
+  file_path: ".chronoclean/chronoclean.log"
+
+performance:
+  multiprocessing: true
+  max_workers: 0
+  chunk_size: 500
+  enable_cache: true
+  cache_location: ".chronoclean/cache.db"
+
+synology:
+  safe_fs_mode: true
+  use_long_paths: false
+  min_free_space_mb: 500

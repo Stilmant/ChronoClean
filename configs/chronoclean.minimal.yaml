@@ -1,0 +1,4 @@
+# ChronoClean minimal configuration
+paths:
+  source: "/volume1/photos_inbox"
+  destination: "/volume1/photos_sorted"
