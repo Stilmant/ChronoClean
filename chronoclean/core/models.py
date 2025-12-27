@@ -14,6 +14,7 @@ class DateSource(Enum):
     FILESYSTEM_CREATED = "filesystem_created"
     FILESYSTEM_MODIFIED = "filesystem_modified"
     FOLDER_NAME = "folder_name"
+    FILENAME = "filename"  # v0.2: Date extracted from filename
     HEURISTIC = "heuristic"
     UNKNOWN = "unknown"
 
@@ -52,6 +53,16 @@ class FileRecord:
     needs_rename: bool = False
     has_exif: bool = False
     exif_error: Optional[str] = None
+
+    # v0.2: Filename date and mismatch detection
+    filename_date: Optional[datetime] = None
+    date_mismatch: bool = False
+    date_mismatch_days: Optional[int] = None
+
+    # v0.2: Duplicate detection
+    file_hash: Optional[str] = None
+    duplicate_of: Optional[Path] = None
+    is_duplicate: bool = False
 
     @property
     def destination_path(self) -> Optional[Path]:

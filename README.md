@@ -1,6 +1,6 @@
 # ChronoClean
 
-![Status](https://img.shields.io/badge/status-v0.1_prototype-blue)
+![Status](https://img.shields.io/badge/status-v0.2_prototype-blue)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Platform](https://img.shields.io/badge/platform-SynologyNAS-lightgrey)
@@ -242,6 +242,10 @@ pip install -e ".[dev]"
 python3 -m chronoclean scan /volume1/photos
 python3 -m chronoclean scan /volume1/photos --report  # Detailed per-file report
 
+# Export scan results (v0.2)
+python3 -m chronoclean export json /volume1/photos -o results.json
+python3 -m chronoclean export csv /volume1/photos -o results.csv
+
 # Organize files (dry-run by default)
 python3 -m chronoclean apply /volume1/unsorted /volume1/photos
 
@@ -298,6 +302,7 @@ renaming:
 ChronoClean development follows a phased approach from prototype to production-ready tool.
 
 > 📄 **See [docs/IMPLEMENTATION_SPEC_v0.1.md](docs/IMPLEMENTATION_SPEC_v0.1.md) for v0.1 implementation details.**  
+> 📄 **See [docs/IMPLEMENTATION_SPEC_v0.2.md](docs/IMPLEMENTATION_SPEC_v0.2.md) for v0.2 implementation details.**  
 > 📄 **See [docs/IMPLEMENTATION_SPEC_v0.2.md](docs/IMPLEMENTATION_SPEC_v0.2.md) for v0.2 planning.**
 
 ### v0.1 – Prototype ✅ Complete
@@ -310,7 +315,7 @@ ChronoClean development follows a phased approach from prototype to production-r
 - ✅ Folder tag detection (heuristics, ignore/force lists, fuzzy matching)
 - ✅ Safe file operations (copy/move with dry-run, rollback support)
 - ✅ CLI with Typer (`scan`, `apply`, `version`)
-- ✅ Unit test suite (315 tests with pytest + pytest-mock)
+- ✅ Unit test suite (352 tests with pytest + pytest-mock)
 - ✅ Dry-run mode (default) with `--no-dry-run` to apply
 - ✅ Copy mode (default) with `--move` for moves
 - ✅ Detailed scan report (`--report` flag)

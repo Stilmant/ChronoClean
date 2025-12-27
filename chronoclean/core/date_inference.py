@@ -38,6 +38,31 @@ FOLDER_DATE_PATTERNS = [
 ]
 
 
+# v0.2: Regex patterns for extracting dates from filenames
+FILENAME_DATE_PATTERNS = [
+    # YYYYMMDD_HHMMSS (Screenshot, camera)
+    (re.compile(r"(\d{4})(\d{2})(\d{2})[_-](\d{2})(\d{2})(\d{2})"), "ymdhms"),
+    # Screenshot_YYYYMMDD-HHMMSS (Android screenshots)
+    (re.compile(r"Screenshot[_-](\d{4})(\d{2})(\d{2})[_-](\d{2})(\d{2})(\d{2})"), "ymdhms"),
+    # IMG-YYYYMMDD-WA (WhatsApp)
+    (re.compile(r"IMG-(\d{4})(\d{2})(\d{2})-WA\d+", re.IGNORECASE), "ymd"),
+    # VID-YYYYMMDD-WA (WhatsApp video)
+    (re.compile(r"VID-(\d{4})(\d{2})(\d{2})-WA\d+", re.IGNORECASE), "ymd"),
+    # IMG_YYYYMMDD (standard camera format with 8 digits)
+    (re.compile(r"IMG[_-](\d{4})(\d{2})(\d{2})(?!\d)", re.IGNORECASE), "ymd"),
+    # YYYYMMDD anywhere (8-digit date)
+    (re.compile(r"(?:^|[^0-9])(\d{4})(\d{2})(\d{2})(?!\d)"), "ymd"),
+    # YYYY-MM-DD anywhere
+    (re.compile(r"(\d{4})-(\d{2})-(\d{2})"), "ymd"),
+    # YYYY_MM_DD anywhere
+    (re.compile(r"(\d{4})_(\d{2})_(\d{2})"), "ymd"),
+    # IMG_YYMMDD (2-digit year format, e.g., IMG_090831)
+    (re.compile(r"IMG[_-](\d{2})(\d{2})(\d{2})(?!\d)", re.IGNORECASE), "yymmdd"),
+    # YYMMDD at start of filename
+    (re.compile(r"^(\d{2})(\d{2})(\d{2})(?!\d)"), "yymmdd"),
+]
+
+
 class DateInferenceEngine:
     """Infers dates from multiple sources with configurable priority."""
 
@@ -45,6 +70,7 @@ class DateInferenceEngine:
         self,
         priority: Optional[list[str]] = None,
         exif_reader: Optional[ExifReader] = None,
+        year_cutoff: int = 30,
     ):
         """
         Initialize the date inference engine.
@@ -53,15 +79,18 @@ class DateInferenceEngine:
             priority: Ordered list of sources to try.
                       Default: ["exif", "filesystem", "folder_name"]
             exif_reader: ExifReader instance (optional, created if not provided)
+            year_cutoff: For 2-digit years: 00-cutoff = 2000s, cutoff-99 = 1900s
         """
         self.priority = priority or ["exif", "filesystem", "folder_name"]
         self.exif_reader = exif_reader or ExifReader()
+        self.year_cutoff = year_cutoff
 
         # Map source names to methods
         self._source_methods = {
             "exif": self._get_exif_date,
             "filesystem": self._get_filesystem_date,
             "folder_name": self._get_folder_date,
+            "filename": self._get_filename_date,
         }
 
     def infer_date(self, file_path: Path) -> tuple[Optional[datetime], DateSource]:
@@ -89,6 +118,24 @@ class DateInferenceEngine:
 
         logger.debug(f"No date found for {file_path.name}")
         return None, DateSource.UNKNOWN
+
+    def get_filename_date(self, file_path: Path) -> Optional[datetime]:
+        """
+        Extract date from filename only.
+
+        Used for date mismatch detection (comparing filename date vs EXIF date).
+        This is a public method that wraps _get_filename_date.
+
+        Args:
+            file_path: Path to the file
+
+        Returns:
+            datetime or None
+        """
+        result = self._get_filename_date(file_path)
+        if result:
+            return result[0]
+        return None
 
     def _get_exif_date(self, file_path: Path) -> Optional[tuple[datetime, DateSource]]:
         """Extract date from EXIF metadata."""
@@ -150,6 +197,73 @@ class DateInferenceEngine:
             current = current.parent
 
         return None
+
+    def _get_filename_date(self, file_path: Path) -> Optional[tuple[datetime, DateSource]]:
+        """
+        Extract date from filename patterns.
+
+        Recognizes patterns like:
+        - IMG_20240315_143000.jpg (YYYYMMDD_HHMMSS)
+        - IMG_090831.jpg (YYMMDD)
+        - 2024-03-15_photo.jpg (YYYY-MM-DD)
+        - IMG-20240315-WA0001.jpg (WhatsApp)
+        - Screenshot_20240315_143000.png (Screenshots)
+        """
+        filename = file_path.stem  # Filename without extension
+
+        for pattern, date_type in FILENAME_DATE_PATTERNS:
+            match = pattern.search(filename)
+            if not match:
+                continue
+
+            try:
+                groups = match.groups()
+
+                if date_type == "ymdhms" and len(groups) >= 6:
+                    year = int(groups[0])
+                    month = int(groups[1])
+                    day = int(groups[2])
+                    hour = int(groups[3])
+                    minute = int(groups[4])
+                    second = int(groups[5])
+                    if self._is_valid_date(year, month, day) and self._is_valid_time(hour, minute, second):
+                        return datetime(year, month, day, hour, minute, second), DateSource.FILENAME
+
+                elif date_type == "ymd" and len(groups) >= 3:
+                    year = int(groups[0])
+                    month = int(groups[1])
+                    day = int(groups[2])
+                    if self._is_valid_date(year, month, day):
+                        return datetime(year, month, day), DateSource.FILENAME
+
+                elif date_type == "yymmdd" and len(groups) >= 3:
+                    # 2-digit year: apply year cutoff
+                    yy = int(groups[0])
+                    month = int(groups[1])
+                    day = int(groups[2])
+                    year = self._expand_two_digit_year(yy)
+                    if self._is_valid_date(year, month, day):
+                        return datetime(year, month, day), DateSource.FILENAME
+
+            except (ValueError, IndexError):
+                continue
+
+        return None
+
+    def _expand_two_digit_year(self, yy: int) -> int:
+        """
+        Expand a 2-digit year to 4 digits.
+
+        Uses year_cutoff: 00 to cutoff -> 2000s, cutoff+1 to 99 -> 1900s
+        Default cutoff=30: 00-30 = 2000-2030, 31-99 = 1931-1999
+        """
+        if yy <= self.year_cutoff:
+            return 2000 + yy
+        return 1900 + yy
+
+    def _is_valid_time(self, hour: int, minute: int, second: int) -> bool:
+        """Check if time components are valid."""
+        return 0 <= hour <= 23 and 0 <= minute <= 59 and 0 <= second <= 59
 
     def _parse_folder_date(self, folder_name: str) -> Optional[datetime]:
         """
@@ -228,3 +342,26 @@ def get_best_date(
     """
     engine = DateInferenceEngine(priority=priority)
     return engine.infer_date(file_path)
+
+
+def get_filename_date(
+    file_path: Path,
+    year_cutoff: int = 30,
+) -> Optional[datetime]:
+    """
+    Convenience function to extract date from filename only.
+
+    Used for date mismatch detection (comparing filename date vs EXIF date).
+
+    Args:
+        file_path: Path to the file
+        year_cutoff: For 2-digit years
+
+    Returns:
+        datetime or None
+    """
+    engine = DateInferenceEngine(year_cutoff=year_cutoff)
+    result = engine._get_filename_date(file_path)
+    if result:
+        return result[0]
+    return None

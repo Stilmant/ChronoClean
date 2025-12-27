@@ -8,8 +8,11 @@ import yaml
 
 from chronoclean.config.schema import (
     ChronoCleanConfig,
+    DateMismatchConfig,
     DryRunConfig,
     DuplicatesConfig,
+    ExportConfig,
+    FilenameDateConfig,
     FolderTagsConfig,
     GeneralConfig,
     HeuristicConfig,
@@ -103,6 +106,11 @@ class ConfigLoader:
             folder_tags=cls._build_folder_tags(data.get("folder_tags", {})),
             renaming=cls._build_renaming(data.get("renaming", {})),
             duplicates=cls._build_duplicates(data.get("duplicates", {})),
+            # v0.2 additions
+            filename_date=cls._build_filename_date(data.get("filename_date", {})),
+            date_mismatch=cls._build_date_mismatch(data.get("date_mismatch", {})),
+            export=cls._build_export(data.get("export", {})),
+            # Display and system
             dry_run=cls._build_dry_run(data.get("dry_run", {})),
             logging=cls._build_logging(data.get("logging", {})),
             performance=cls._build_performance(data.get("performance", {})),
@@ -223,14 +231,64 @@ class ConfigLoader:
     def _build_duplicates(cls, data: dict[str, Any]) -> DuplicatesConfig:
         """Build DuplicatesConfig from dictionary."""
         config = DuplicatesConfig()
+        if "enabled" in data:
+            config.enabled = bool(data["enabled"])
         if "policy" in data:
             config.policy = data["policy"]
         if "hashing_algorithm" in data:
             config.hashing_algorithm = data["hashing_algorithm"]
+        if "on_collision" in data:
+            config.on_collision = data["on_collision"]
         if "consider_resolution" in data:
             config.consider_resolution = bool(data["consider_resolution"])
         if "consider_metadata" in data:
             config.consider_metadata = bool(data["consider_metadata"])
+        if "cache_hashes" in data:
+            config.cache_hashes = bool(data["cache_hashes"])
+        return config
+
+    @classmethod
+    def _build_filename_date(cls, data: dict[str, Any]) -> FilenameDateConfig:
+        """Build FilenameDateConfig from dictionary (v0.2)."""
+        config = FilenameDateConfig()
+        if "enabled" in data:
+            config.enabled = bool(data["enabled"])
+        if "patterns" in data:
+            config.patterns = list(data["patterns"])
+        if "year_cutoff" in data:
+            config.year_cutoff = int(data["year_cutoff"])
+        if "priority" in data:
+            config.priority = data["priority"]
+        return config
+
+    @classmethod
+    def _build_date_mismatch(cls, data: dict[str, Any]) -> DateMismatchConfig:
+        """Build DateMismatchConfig from dictionary (v0.2)."""
+        config = DateMismatchConfig()
+        if "enabled" in data:
+            config.enabled = bool(data["enabled"])
+        if "threshold_days" in data:
+            config.threshold_days = int(data["threshold_days"])
+        if "warn_on_scan" in data:
+            config.warn_on_scan = bool(data["warn_on_scan"])
+        if "include_in_export" in data:
+            config.include_in_export = bool(data["include_in_export"])
+        return config
+
+    @classmethod
+    def _build_export(cls, data: dict[str, Any]) -> ExportConfig:
+        """Build ExportConfig from dictionary (v0.2)."""
+        config = ExportConfig()
+        if "default_format" in data:
+            config.default_format = data["default_format"]
+        if "include_statistics" in data:
+            config.include_statistics = bool(data["include_statistics"])
+        if "include_folder_tags" in data:
+            config.include_folder_tags = bool(data["include_folder_tags"])
+        if "pretty_print" in data:
+            config.pretty_print = bool(data["pretty_print"])
+        if "output_path" in data:
+            config.output_path = data["output_path"]
         return config
 
     @classmethod
@@ -313,7 +371,7 @@ class ConfigLoader:
             )
 
         # Validate fallback priority
-        valid_sources = ["exif", "filesystem", "folder_name", "heuristic"]
+        valid_sources = ["exif", "filesystem", "folder_name", "filename", "heuristic"]
         for source in config.sorting.fallback_date_priority:
             if source not in valid_sources:
                 errors.append(f"Invalid fallback source: {source}")

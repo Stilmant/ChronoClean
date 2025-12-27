@@ -18,6 +18,7 @@ from chronoclean.core.folder_tagger import FolderTagger
 from chronoclean.core.date_inference import DateInferenceEngine
 from chronoclean.core.file_operations import FileOperations, BatchOperations
 from chronoclean.core.models import OperationPlan
+from chronoclean.core.exporter import Exporter, export_to_json, export_to_csv
 from chronoclean.utils.logging import setup_logging
 
 app = typer.Typer(
@@ -34,6 +35,14 @@ config_app = typer.Typer(
     no_args_is_help=True,
 )
 app.add_typer(config_app, name="config")
+
+# Export subcommand group
+export_app = typer.Typer(
+    name="export",
+    help="Export scan results to various formats.",
+    no_args_is_help=True,
+)
+app.add_typer(export_app, name="export")
 
 console = Console()
 
@@ -568,6 +577,184 @@ def config_path():
         console.print()
         console.print("[dim]No config file found. Using built-in defaults.[/dim]")
         console.print("Run 'chronoclean config init' to create one.")
+
+
+def _perform_scan(
+    source: Path,
+    cfg: ChronoCleanConfig,
+    recursive: Optional[bool] = None,
+    videos: Optional[bool] = None,
+    limit: Optional[int] = None,
+):
+    """Perform a scan and return the result. Used by export commands."""
+    from chronoclean.core.models import ScanResult
+    
+    # Resolve options: CLI overrides config
+    use_recursive = _resolve_bool(recursive, cfg.general.recursive)
+    use_videos = _resolve_bool(videos, cfg.general.include_videos)
+    use_limit = limit if limit is not None else cfg.scan.limit
+
+    # Validate source
+    source = source.resolve()
+    if not source.exists():
+        console.print(f"[red]Error:[/red] Source path not found: {source}")
+        raise typer.Exit(1)
+
+    if not source.is_dir():
+        console.print(f"[red]Error:[/red] Source is not a directory: {source}")
+        raise typer.Exit(1)
+
+    # Create components from config
+    folder_tagger = FolderTagger(
+        ignore_list=cfg.folder_tags.ignore_list,
+        force_list=cfg.folder_tags.force_list,
+        min_length=cfg.folder_tags.min_length,
+        max_length=cfg.folder_tags.max_length,
+        distance_threshold=cfg.folder_tags.distance_threshold,
+    )
+    
+    date_engine = DateInferenceEngine(
+        priority=cfg.sorting.fallback_date_priority,
+    )
+
+    # Create scanner with config values
+    scanner = Scanner(
+        date_engine=date_engine,
+        folder_tagger=folder_tagger,
+        image_extensions=set(cfg.scan.image_extensions),
+        video_extensions=set(cfg.scan.video_extensions),
+        raw_extensions=set(cfg.scan.raw_extensions),
+        recursive=use_recursive,
+        include_videos=use_videos,
+        ignore_hidden=cfg.general.ignore_hidden_files,
+    )
+
+    # Run scan
+    with console.status("[bold blue]Scanning files..."):
+        result = scanner.scan(source, limit=use_limit)
+    
+    return result
+
+
+@export_app.command("json")
+def export_json(
+    source: Path = typer.Argument(..., help="Source directory to scan"),
+    output: Optional[Path] = typer.Option(
+        None, "--output", "-o",
+        help="Output file path (default: stdout)",
+    ),
+    recursive: Optional[bool] = typer.Option(
+        None, "--recursive/--no-recursive",
+        help="Scan subfolders",
+    ),
+    videos: Optional[bool] = typer.Option(
+        None, "--videos/--no-videos",
+        help="Include video files",
+    ),
+    limit: Optional[int] = typer.Option(
+        None, "--limit", "-l",
+        help="Limit files (for debugging)",
+    ),
+    statistics: bool = typer.Option(
+        True, "--statistics/--no-statistics",
+        help="Include summary statistics",
+    ),
+    pretty: bool = typer.Option(
+        True, "--pretty/--compact",
+        help="Pretty print JSON output",
+    ),
+    config: Optional[Path] = typer.Option(
+        None, "--config", "-c",
+        help="Config file path",
+    ),
+):
+    """
+    Export scan results to JSON format.
+    
+    Scans the source directory and exports the results to JSON.
+    By default outputs to stdout; use --output to write to a file.
+    """
+    # Load configuration
+    cfg = ConfigLoader.load(config)
+    
+    console.print(f"[blue]Scanning:[/blue] {source}")
+    if config:
+        console.print(f"[dim]Config: {config}[/dim]")
+    console.print()
+    
+    # Perform scan
+    result = _perform_scan(source, cfg, recursive, videos, limit)
+    
+    # Create exporter
+    exporter = Exporter(
+        include_statistics=statistics,
+        pretty_print=pretty,
+    )
+    
+    # Export
+    json_str = exporter.to_json(result, output)
+    
+    if output:
+        console.print(f"[green]Exported to:[/green] {output}")
+        console.print(f"[dim]Files: {len(result.files)}[/dim]")
+    else:
+        # Output to stdout
+        console.print(json_str)
+
+
+@export_app.command("csv")
+def export_csv(
+    source: Path = typer.Argument(..., help="Source directory to scan"),
+    output: Optional[Path] = typer.Option(
+        None, "--output", "-o",
+        help="Output file path (default: stdout)",
+    ),
+    recursive: Optional[bool] = typer.Option(
+        None, "--recursive/--no-recursive",
+        help="Scan subfolders",
+    ),
+    videos: Optional[bool] = typer.Option(
+        None, "--videos/--no-videos",
+        help="Include video files",
+    ),
+    limit: Optional[int] = typer.Option(
+        None, "--limit", "-l",
+        help="Limit files (for debugging)",
+    ),
+    config: Optional[Path] = typer.Option(
+        None, "--config", "-c",
+        help="Config file path",
+    ),
+):
+    """
+    Export scan results to CSV format.
+    
+    Scans the source directory and exports the results to CSV.
+    By default outputs to stdout; use --output to write to a file.
+    """
+    # Load configuration
+    cfg = ConfigLoader.load(config)
+    
+    console.print(f"[blue]Scanning:[/blue] {source}", err=True)
+    if config:
+        console.print(f"[dim]Config: {config}[/dim]", err=True)
+    console.print(err=True)
+    
+    # Perform scan
+    result = _perform_scan(source, cfg, recursive, videos, limit)
+    
+    # Create exporter
+    exporter = Exporter()
+    
+    # Export
+    csv_str = exporter.to_csv(result, output)
+    
+    if output:
+        console.print(f"[green]Exported to:[/green] {output}", err=True)
+        console.print(f"[dim]Files: {len(result.files)}[/dim]", err=True)
+    else:
+        # Output to stdout (without rich formatting)
+        print(csv_str, end="")
 
 
 @app.command()

@@ -108,10 +108,52 @@ class RenamingConfig:
 class DuplicatesConfig:
     """Duplicate handling configuration settings."""
 
+    enabled: bool = True
     policy: str = "safe"  # safe, skip, overwrite
-    hashing_algorithm: str = "sha256"
+    hashing_algorithm: str = "sha256"  # sha256, md5
+    on_collision: str = "check_hash"  # check_hash, rename, skip, fail
     consider_resolution: bool = True
     consider_metadata: bool = True
+    cache_hashes: bool = True
+
+
+@dataclass
+class FilenameDateConfig:
+    """Filename date extraction configuration (v0.2)."""
+
+    enabled: bool = True
+    patterns: list[str] = field(
+        default_factory=lambda: [
+            "YYYYMMDD_HHMMSS",
+            "YYYYMMDD",
+            "YYMMDD",
+            "YYYY-MM-DD",
+            "YYYY_MM_DD",
+        ]
+    )
+    year_cutoff: int = 30  # 00-30 = 2000s, 31-99 = 1900s
+    priority: str = "after_exif"  # before_exif, after_exif, after_filesystem
+
+
+@dataclass
+class DateMismatchConfig:
+    """Date mismatch detection configuration (v0.2)."""
+
+    enabled: bool = True
+    threshold_days: int = 1
+    warn_on_scan: bool = True
+    include_in_export: bool = True
+
+
+@dataclass
+class ExportConfig:
+    """Export configuration (v0.2)."""
+
+    default_format: str = "json"  # json, csv
+    include_statistics: bool = True
+    include_folder_tags: bool = True
+    pretty_print: bool = True
+    output_path: str = ".chronoclean/export"
 
 
 @dataclass
@@ -168,6 +210,11 @@ class ChronoCleanConfig:
     folder_tags: FolderTagsConfig = field(default_factory=FolderTagsConfig)
     renaming: RenamingConfig = field(default_factory=RenamingConfig)
     duplicates: DuplicatesConfig = field(default_factory=DuplicatesConfig)
+    # v0.2 additions
+    filename_date: FilenameDateConfig = field(default_factory=FilenameDateConfig)
+    date_mismatch: DateMismatchConfig = field(default_factory=DateMismatchConfig)
+    export: ExportConfig = field(default_factory=ExportConfig)
+    # Display and system
     dry_run: DryRunConfig = field(default_factory=DryRunConfig)
     logging: LoggingConfig = field(default_factory=LoggingConfig)
     performance: PerformanceConfig = field(default_factory=PerformanceConfig)

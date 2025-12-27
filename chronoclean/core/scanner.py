@@ -221,6 +221,19 @@ class Scanner:
         record.date_source = date_source
         record.has_exif = date_source == DateSource.EXIF
 
+        # v0.2: Extract filename date (always extract for comparison)
+        filename_date = self.date_engine.get_filename_date(file_path)
+        if filename_date:
+            record.filename_date = filename_date
+            
+            # Check for date mismatch if we have both dates
+            if detected_date and filename_date:
+                # Calculate the difference in days
+                delta = abs((detected_date - filename_date).days)
+                if delta > 0:
+                    record.date_mismatch = True
+                    record.date_mismatch_days = delta
+
         # Get folder tag
         tag = self.folder_tagger.extract_tag(file_path)
         if tag:
