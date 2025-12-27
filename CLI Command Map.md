@@ -206,15 +206,46 @@ Usage:
 11. **config**
 ----------
 
-Display or edit configuration.
+Configuration management commands.
+
+### config init
+
+Initialize a new configuration file.
+
+Usage:
+
+`chronoclean config init`
+`chronoclean config init --full`
+
+Options:
+
+- `--output PATH` / `-o PATH` — Output file path (default: chronoclean.yaml)
+- `--full` — Generate complete config with all options documented
+- `--force` / `-f` — Overwrite existing config file
+
+### config show
+
+Display current configuration.
 
 Usage:
 
 `chronoclean config show`
+`chronoclean config show --section sorting`
 
-`chronoclean config set <key> <value>`
+Options:
 
-Supports a `config.yaml` file.
+- `--config PATH` / `-c PATH` — Specify config file path
+- `--section NAME` / `-s NAME` — Show only specific section
+
+### config path
+
+Show where ChronoClean looks for config files.
+
+Usage:
+
+`chronoclean config path`
+
+Shows search paths and marks the active config file.
 
 12. **version**
 -----------

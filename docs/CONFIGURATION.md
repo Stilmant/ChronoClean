@@ -4,17 +4,59 @@ This guide explains how to configure ChronoClean using YAML configuration files.
 
 ## Quick Start
 
-1. Copy one of the sample configs to your project root:
-   ```bash
-   cp configs/chronoclean.minimal.yaml chronoclean.yaml
-   ```
+**Option 1: Using `config init` (Recommended)**
 
-2. Edit the file to match your needs
+```bash
+# Create a minimal config file
+chronoclean config init
 
-3. Run ChronoClean - it will automatically find the config:
-   ```bash
-   chronoclean scan /path/to/photos
-   ```
+# Or create a full config with all options documented
+chronoclean config init --full
+```
+
+**Option 2: Copy a sample config**
+
+```bash
+cp configs/chronoclean.minimal.yaml chronoclean.yaml
+```
+
+Then edit the file and run ChronoClean:
+```bash
+chronoclean scan /path/to/photos
+```
+
+## Config Commands
+
+### `config init`
+
+Create a new configuration file:
+
+```bash
+chronoclean config init                    # Minimal config (recommended for beginners)
+chronoclean config init --full             # Full config with all options documented
+chronoclean config init -o myconfig.yaml   # Custom output path
+chronoclean config init --force            # Overwrite existing file
+```
+
+### `config show`
+
+Display current effective configuration:
+
+```bash
+chronoclean config show                    # Show all settings
+chronoclean config show --section sorting  # Show only sorting section
+chronoclean config show -c custom.yaml     # Show specific config file
+```
+
+### `config path`
+
+Show where ChronoClean looks for config files:
+
+```bash
+chronoclean config path
+```
+
+This displays all search paths and marks which config file is currently active.
 
 ## Config File Locations
 

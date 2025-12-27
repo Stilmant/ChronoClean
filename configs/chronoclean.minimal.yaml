@@ -1,6 +1,0 @@
-# ChronoClean minimal configuration
-# Copy this file to your project root as 'chronoclean.yaml' to use it
-# Only override what you need - everything else uses sensible defaults
-
-sorting:
-  folder_structure: "YYYY/MM"  # Options: YYYY, YYYY/MM, YYYY/MM/DD
