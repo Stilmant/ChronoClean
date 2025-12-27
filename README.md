@@ -68,7 +68,7 @@ ChronoClean does not attempt complex AI deduplication or modification of image c
 ## Features Overview
 
 ### Sorting & Organization
-- EXIF-based sorting into a chronological folder hierarchy (year/month/day)
+- EXIF-based sorting into a chronological folder hierarchy (year/month) (day optional)
 - Fallback to creation/modification timestamp when EXIF is missing
 - Optionally infer date from directory name if metadata is absent
 - Consistent, predictable tree structure suitable for NAS archives and long-term storage
@@ -123,10 +123,10 @@ Photo libraries often contain a mix of sources: phone backups, WhatsApp exports,
 ```
 2024/
   01/
-    02/
-    03/
   02/
-    14/
+2025/
+  01/
+  02/
 ```
 
 Files are moved based on EXIF or fallback dates, ensuring chronological order regardless of original folder or filename chaos.
@@ -258,7 +258,8 @@ ChronoClean is in early development (v0.0). The roadmap below outlines the plann
 
 ### v0.1 – Prototype
 - EXIF extraction and date parsing (images)
-- Chronological sorting into year/month/day folders
+- Chronological sorting into year/month folders (day as optional)
+- Fallback date logic (filesystem timestamps)
 - Basic file renaming (optional)
 - Initial folder tag detection (simple heuristics)
 - Minimal CLI (scan/apply)
