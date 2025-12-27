@@ -42,6 +42,7 @@ def scan(
     videos: bool = typer.Option(True, "--videos/--no-videos", help="Include video files"),
     limit: Optional[int] = typer.Option(None, "--limit", "-l", help="Limit files (for debugging)"),
     config: Optional[Path] = typer.Option(None, "--config", "-c", help="Config file path"),
+    report: bool = typer.Option(False, "--report", "-r", help="Show detailed per-file report"),
 ):
     """
     Analyze files in the source directory.
@@ -116,6 +117,30 @@ def scan(
         console.print(date_table)
         console.print()
 
+    # Detailed per-file report
+    if report:
+        console.print()
+        console.print("[bold]Detailed File Report:[/bold]")
+        report_table = Table(show_header=True)
+        report_table.add_column("File", style="cyan", max_width=40)
+        report_table.add_column("Date", style="white")
+        report_table.add_column("Source", style="yellow")
+        report_table.add_column("Folder Tag", style="green")
+
+        for record in result.files:
+            filename = record.source_path.name
+            if len(filename) > 37:
+                filename = filename[:34] + "..."
+            
+            date_str = record.detected_date.strftime("%Y-%m-%d %H:%M") if record.detected_date else "[red]None[/red]"
+            source_str = record.date_source.value if record.date_source else "unknown"
+            tag_str = record.folder_tag if record.folder_tag else "-"
+            
+            report_table.add_row(filename, date_str, source_str, tag_str)
+
+        console.print(report_table)
+        console.print()
+
     # Folder tags detected
     if result.folder_tags_detected:
         console.print(f"[bold]Folder tags detected:[/bold] {len(result.folder_tags_detected)}")
@@ -139,6 +164,7 @@ def apply(
     source: Path = typer.Argument(..., help="Source directory"),
     destination: Path = typer.Argument(..., help="Destination directory"),
     dry_run: bool = typer.Option(True, "--dry-run/--no-dry-run", help="Simulate without changes"),
+    move: bool = typer.Option(False, "--move", help="Move files instead of copy (default: copy)"),
     rename: bool = typer.Option(False, "--rename/--no-rename", help="Enable file renaming"),
     tag_names: bool = typer.Option(False, "--tag-names/--no-tag-names", help="Add folder tags"),
     recursive: bool = typer.Option(True, "--recursive/--no-recursive", help="Scan subfolders"),
@@ -171,7 +197,9 @@ def apply(
 
     # Show mode
     mode_text = "[yellow]DRY RUN[/yellow]" if dry_run else "[red]LIVE MODE[/red]"
+    operation_text = "[red]MOVE[/red]" if move else "[green]COPY[/green]"
     console.print(f"Mode: {mode_text}")
+    console.print(f"Operation: {operation_text}")
     console.print(f"Source: {source}")
     console.print(f"Destination: {destination}")
     console.print(f"Structure: {structure}")
@@ -181,7 +209,8 @@ def apply(
 
     # Confirmation for live mode
     if not dry_run and not force:
-        confirm = typer.confirm("This will modify files. Continue?")
+        action = "move" if move else "copy"
+        confirm = typer.confirm(f"This will {action} files. Continue?")
         if not confirm:
             console.print("Aborted.")
             raise typer.Exit(0)
@@ -278,11 +307,17 @@ def apply(
         batch = BatchOperations(file_ops, dry_run=False)
 
         operations = [(op.source, op.destination_path) for op in plan.moves]
-        success, failed = batch.execute_moves(operations)
+        
+        if move:
+            success, failed = batch.execute_moves(operations)
+            action_word = "moved"
+        else:
+            success, failed = batch.execute_copies(operations)
+            action_word = "copied"
 
         console.print()
         console.print("[bold green]Complete![/bold green]")
-        console.print(f"  Successfully moved: {success}")
+        console.print(f"  Successfully {action_word}: {success}")
         if failed:
             console.print(f"  [red]Failed: {failed}[/red]")
 

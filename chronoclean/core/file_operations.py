@@ -281,6 +281,34 @@ class BatchOperations:
 
         return success_count, failure_count
 
+    def execute_copies(
+        self,
+        operations: list[tuple[Path, Path]],
+    ) -> tuple[int, int]:
+        """
+        Execute a batch of copy operations.
+
+        Args:
+            operations: List of (source, destination) tuples
+
+        Returns:
+            Tuple of (success_count, failure_count)
+        """
+        success_count = 0
+        failure_count = 0
+
+        for source, destination in operations:
+            success, message = self.file_ops.copy_file(source, destination)
+
+            if success:
+                self._completed.append((source, destination))
+                success_count += 1
+            else:
+                self._failed.append((source, destination, message))
+                failure_count += 1
+
+        return success_count, failure_count
+
     def rollback(self) -> int:
         """
         Rollback completed operations (move files back).

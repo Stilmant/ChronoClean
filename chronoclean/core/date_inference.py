@@ -101,12 +101,18 @@ class DateInferenceEngine:
         """
         Get date from filesystem.
 
-        Prefers creation date (birth time), falls back to modification date.
+        Prefers modification date (more reliable after file copies),
+        falls back to creation date.
         """
         try:
             stat = file_path.stat()
 
-            # Try to get creation time (not available on all platforms)
+            # Prefer modification time (survives file copies)
+            mtime = datetime.fromtimestamp(stat.st_mtime)
+            if mtime:
+                return mtime, DateSource.FILESYSTEM_MODIFIED
+
+            # Fall back to creation time
             ctime = None
             if hasattr(stat, "st_birthtime"):
                 # macOS
@@ -118,9 +124,7 @@ class DateInferenceEngine:
             if ctime:
                 return ctime, DateSource.FILESYSTEM_CREATED
 
-            # Fall back to modification time
-            mtime = datetime.fromtimestamp(stat.st_mtime)
-            return mtime, DateSource.FILESYSTEM_MODIFIED
+            return None
 
         except OSError as e:
             logger.warning(f"Cannot get filesystem date for {file_path}: {e}")
