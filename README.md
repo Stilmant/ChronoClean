@@ -1,6 +1,6 @@
 # ChronoClean
 
-![Status](https://img.shields.io/badge/status-in_development-yellow)
+![Status](https://img.shields.io/badge/status-v0.1_prototype-blue)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Platform](https://img.shields.io/badge/platform-SynologyNAS-lightgrey)
@@ -231,14 +231,25 @@ Alternatives may be chosen depending on portability and Synology constraints.
 1. Install Python 3 via Package Center  
 2. Upload project folder to the NAS  
 3. Install dependencies:
-```
-pip install -r requirements.txt
+```bash
+pip install -e .
+# Or with dev dependencies:
+pip install -e ".[dev]"
 ```
 4. Run the tool:
-```
+```bash
+# Analyze files
 python3 -m chronoclean scan /volume1/photos
-python3 -m chronoclean export
-python3 -m chronoclean apply
+python3 -m chronoclean scan /volume1/photos --report  # Detailed per-file report
+
+# Organize files (dry-run by default)
+python3 -m chronoclean apply /volume1/unsorted /volume1/photos
+
+# Apply changes with copy (safe)
+python3 -m chronoclean apply /volume1/unsorted /volume1/photos --no-dry-run
+
+# Apply changes with move
+python3 -m chronoclean apply /volume1/unsorted /volume1/photos --no-dry-run --move
 ```
 5. Optionally schedule via DSM Task Scheduler
 
@@ -254,36 +265,39 @@ python3 -m chronoclean apply
 
 ## Roadmap
 
-ChronoClean is in early development (v0.0). The roadmap below outlines the planned evolution from prototype to a robust, production-ready tool.
+ChronoClean development follows a phased approach from prototype to production-ready tool.
 
-> 📄 **See [docs/IMPLEMENTATION_SPEC_v0.1.md](docs/IMPLEMENTATION_SPEC_v0.1.md) for detailed implementation specifications.**
+> 📄 **See [docs/IMPLEMENTATION_SPEC_v0.1.md](docs/IMPLEMENTATION_SPEC_v0.1.md) for v0.1 implementation details.**  
+> 📄 **See [docs/IMPLEMENTATION_SPEC_v0.2.md](docs/IMPLEMENTATION_SPEC_v0.2.md) for v0.2 planning.**
 
-### v0.1 – Prototype
-- Project structure and configuration system (YAML-based)
-- Data models (`FileRecord`, `ScanResult`, `OperationPlan`)
-- EXIF extraction and date parsing (images only via `exifread`)
-- Date inference engine with configurable fallback priority (EXIF → filesystem → folder name)
-- Chronological sorting into YYYY/MM folders (day optional)
-- Basic file renaming (optional, pattern-based)
-- Folder tag detection (heuristics, ignore/force lists)
-- Minimal CLI with Typer (`scan`, `apply`, `version`)
-- Unit test suite with pytest + pytest-mock
-- Dry-run mode via `--dry-run` flag on apply
+### v0.1 – Prototype ✅ Complete
+- ✅ Project structure and configuration system (YAML-based)
+- ✅ Data models (`FileRecord`, `ScanResult`, `OperationPlan`, `MoveOperation`)
+- ✅ EXIF extraction and date parsing (images via `exifread`)
+- ✅ Date inference engine with fallback priority (EXIF → filesystem → folder name)
+- ✅ Chronological sorting into YYYY/MM folders (YYYY/MM/DD optional)
+- ✅ Basic file renaming (optional, pattern-based with `{date}_{time}`)
+- ✅ Folder tag detection (heuristics, ignore/force lists, fuzzy matching)
+- ✅ Safe file operations (copy/move with dry-run, rollback support)
+- ✅ CLI with Typer (`scan`, `apply`, `version`)
+- ✅ Unit test suite (315 tests with pytest + pytest-mock)
+- ✅ Dry-run mode (default) with `--no-dry-run` to apply
+- ✅ Copy mode (default) with `--move` for moves
+- ✅ Detailed scan report (`--report` flag)
 
-### v0.2 – Dry Run & Export
-- Dedicated `dryrun` command with detailed simulation output
+### v0.2 – Export & Duplicate Detection
+- Filename date parsing (detect dates in filenames like `IMG_090831.jpg`)
+- Date mismatch warnings (when filename date ≠ EXIF/file date)
 - Export plan: JSON/CSV with detected dates, tags, rename suggestions, conflicts
 - `export` command with `json` and `csv` subcommands
-- Folder classification workflow (`tags list`, `tags classify`, `tags auto`)
 - Hash-based duplicate detection on filename collision (SHA256/xxHash)
-- Conflict resolution strategies
-- `report scan` and `report apply` commands
-- `config show` command
+- Conflict resolution strategies (keep first, keep newest, rename)
+- `report` command for detailed analysis output
+- `config show` command to display current configuration
 
 ### v0.3 – Video & Advanced Metadata
 - Video metadata extraction (hachoir or ffmpeg-python)
 - Unified date handling for images and videos
-- Support for more file types (RAW: CR2, NEF, ARW, DNG; TIFF, etc.)
 - Enhanced EXIF/metadata error handling and logging
 - Heuristic date clustering for files without metadata
 
