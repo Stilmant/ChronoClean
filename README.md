@@ -254,40 +254,54 @@ python3 -m chronoclean apply
 
 ## Roadmap
 
-ChronoClean is in early development (v0.0). The roadmap below outlines the planned evolution from prototype to a robust, production-ready tool:
+ChronoClean is in early development (v0.0). The roadmap below outlines the planned evolution from prototype to a robust, production-ready tool.
+
+> 📄 **See [docs/IMPLEMENTATION_SPEC_v0.1.md](docs/IMPLEMENTATION_SPEC_v0.1.md) for detailed implementation specifications.**
 
 ### v0.1 – Prototype
-- EXIF extraction and date parsing (images)
-- Chronological sorting into year/month folders (day as optional)
-- Fallback date logic (filesystem timestamps)
-- Basic file renaming (optional)
-- Initial folder tag detection (simple heuristics)
-- Minimal CLI (scan/apply)
+- Project structure and configuration system (YAML-based)
+- Data models (`FileRecord`, `ScanResult`, `OperationPlan`)
+- EXIF extraction and date parsing (images only via `exifread`)
+- Date inference engine with configurable fallback priority (EXIF → filesystem → folder name)
+- Chronological sorting into YYYY/MM folders (day optional)
+- Basic file renaming (optional, pattern-based)
+- Folder tag detection (heuristics, ignore/force lists)
+- Minimal CLI with Typer (`scan`, `apply`, `version`)
+- Unit test suite with pytest + pytest-mock
+- Dry-run mode via `--dry-run` flag on apply
 
 ### v0.2 – Dry Run & Export
-- Full dry-run mode (no changes made)
+- Dedicated `dryrun` command with detailed simulation output
 - Export plan: JSON/CSV with detected dates, tags, rename suggestions, conflicts
-- Folder classification workflow (tag/ignore/enforce)
-- More robust fallback logic (filesystem date, folder inference)
-- Improved duplicate handling (hash check on collision)
+- `export` command with `json` and `csv` subcommands
+- Folder classification workflow (`tags list`, `tags classify`, `tags auto`)
+- Hash-based duplicate detection on filename collision (SHA256/xxHash)
+- Conflict resolution strategies
+- `report scan` and `report apply` commands
+- `config show` command
 
 ### v0.3 – Video & Advanced Metadata
-- Video metadata extraction (hachoir/ffmpeg)
+- Video metadata extraction (hachoir or ffmpeg-python)
 - Unified date handling for images and videos
-- Support for more file types (RAW, TIFF, etc.)
-- Enhanced EXIF/metadata error handling
+- Support for more file types (RAW: CR2, NEF, ARW, DNG; TIFF, etc.)
+- Enhanced EXIF/metadata error handling and logging
+- Heuristic date clustering for files without metadata
 
 ### v0.4 – User Experience & Safety
-- Interactive CLI prompts for export review and tag selection
-- Configurable allow/ignore lists for folder tags
-- Improved logging and progress reporting
-- Safety checks: disk space, dry-run warnings, backup reminders
+- Interactive CLI prompts for export review and tag selection (Rich-based)
+- Configurable allow/ignore lists for folder tags (persistent state)
+- Progress bars and improved logging with Rich
+- Safety checks: disk space verification, dry-run warnings, backup reminders
+- `config set` command for runtime configuration changes
+- Undo/rollback support with operation journal
 
 ### v0.5 – NAS & Large-Scale Support
 - Optimizations for large libraries (100k+ files)
+- Caching layer for EXIF data (SQLite-based)
 - Synology DSM integration notes and best practices
-- Task Scheduler compatibility
-- Parallel processing for faster scans (if feasible)
+- Task Scheduler compatibility and headless mode
+- Parallel/multiprocessing for faster scans (configurable workers)
+- Memory-efficient streaming for very large libraries
 
 ### v1.0 – Stable Release
 - Full conflict resolution and rollback support

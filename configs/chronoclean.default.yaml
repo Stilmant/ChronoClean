@@ -14,6 +14,13 @@ paths:
   destination: "/volume1/photos_sorted"
   temp_folder: "/volume1/@tmp/chronoclean"
 
+scan:
+  image_extensions: [".jpg", ".jpeg", ".png", ".tiff", ".tif", ".heic", ".heif", ".webp", ".bmp", ".gif"]
+  video_extensions: [".mp4", ".mov", ".avi", ".mkv", ".m4v", ".3gp", ".wmv", ".webm"]
+  raw_extensions: [".cr2", ".nef", ".arw", ".dng", ".orf", ".rw2"]
+  skip_exif_errors: true
+  limit: null  # Set to integer for debugging (e.g., 100)
+
 sorting:
   folder_structure: "YYYY/MM/DD"
   fallback_date_priority: ["exif", "filesystem", "folder_name", "heuristic"]

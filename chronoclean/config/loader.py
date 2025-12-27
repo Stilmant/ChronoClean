@@ -1,0 +1,341 @@
+"""Configuration loading and validation for ChronoClean."""
+
+import logging
+from pathlib import Path
+from typing import Any, Optional
+
+import yaml
+
+from chronoclean.config.schema import (
+    ChronoCleanConfig,
+    DryRunConfig,
+    DuplicatesConfig,
+    FolderTagsConfig,
+    GeneralConfig,
+    HeuristicConfig,
+    LoggingConfig,
+    PathsConfig,
+    PerformanceConfig,
+    RenamingConfig,
+    ScanConfig,
+    SortingConfig,
+    SynologyConfig,
+)
+
+logger = logging.getLogger(__name__)
+
+
+class ConfigError(Exception):
+    """Configuration error."""
+
+    pass
+
+
+class ConfigLoader:
+    """Loads configuration from YAML files."""
+
+    DEFAULT_CONFIG_PATHS = [
+        Path("chronoclean.yaml"),
+        Path("chronoclean.yml"),
+        Path(".chronoclean/config.yaml"),
+        Path(".chronoclean/config.yml"),
+    ]
+
+    @classmethod
+    def load(cls, config_path: Optional[Path] = None) -> ChronoCleanConfig:
+        """
+        Load configuration.
+
+        Priority:
+        1. Explicit config_path argument
+        2. Default config paths (first found)
+        3. Built-in defaults
+
+        Args:
+            config_path: Optional explicit path to config file
+
+        Returns:
+            ChronoCleanConfig object
+
+        Raises:
+            ConfigError: If config file cannot be read or parsed
+        """
+        config_dict: dict[str, Any] = {}
+
+        # Try to load config file
+        if config_path:
+            if not config_path.exists():
+                raise ConfigError(f"Config file not found: {config_path}")
+            config_dict = cls._load_yaml(config_path)
+        else:
+            # Search default paths
+            for default_path in cls.DEFAULT_CONFIG_PATHS:
+                if default_path.exists():
+                    logger.info(f"Loading config from {default_path}")
+                    config_dict = cls._load_yaml(default_path)
+                    break
+
+        # Build config object with defaults
+        return cls._build_config(config_dict)
+
+    @classmethod
+    def _load_yaml(cls, path: Path) -> dict[str, Any]:
+        """Load YAML file and return dict."""
+        try:
+            with open(path, encoding="utf-8") as f:
+                data = yaml.safe_load(f)
+                return data if data else {}
+        except yaml.YAMLError as e:
+            raise ConfigError(f"Invalid YAML in {path}: {e}")
+        except OSError as e:
+            raise ConfigError(f"Cannot read {path}: {e}")
+
+    @classmethod
+    def _build_config(cls, data: dict[str, Any]) -> ChronoCleanConfig:
+        """Build ChronoCleanConfig from dictionary."""
+        return ChronoCleanConfig(
+            version=data.get("version", "1.0"),
+            general=cls._build_general(data.get("general", {})),
+            paths=cls._build_paths(data.get("paths", {})),
+            scan=cls._build_scan(data.get("scan", {})),
+            sorting=cls._build_sorting(data.get("sorting", {})),
+            heuristic=cls._build_heuristic(data.get("heuristic", {})),
+            folder_tags=cls._build_folder_tags(data.get("folder_tags", {})),
+            renaming=cls._build_renaming(data.get("renaming", {})),
+            duplicates=cls._build_duplicates(data.get("duplicates", {})),
+            dry_run=cls._build_dry_run(data.get("dry_run", {})),
+            logging=cls._build_logging(data.get("logging", {})),
+            performance=cls._build_performance(data.get("performance", {})),
+            synology=cls._build_synology(data.get("synology", {})),
+        )
+
+    @classmethod
+    def _build_general(cls, data: dict[str, Any]) -> GeneralConfig:
+        """Build GeneralConfig from dictionary."""
+        config = GeneralConfig()
+        if "timezone" in data:
+            config.timezone = data["timezone"]
+        if "recursive" in data:
+            config.recursive = bool(data["recursive"])
+        if "include_videos" in data:
+            config.include_videos = bool(data["include_videos"])
+        if "ignore_hidden_files" in data:
+            config.ignore_hidden_files = bool(data["ignore_hidden_files"])
+        if "dry_run_default" in data:
+            config.dry_run_default = bool(data["dry_run_default"])
+        if "output_folder" in data:
+            config.output_folder = data["output_folder"]
+        return config
+
+    @classmethod
+    def _build_paths(cls, data: dict[str, Any]) -> PathsConfig:
+        """Build PathsConfig from dictionary."""
+        config = PathsConfig()
+        if "source" in data and data["source"]:
+            config.source = Path(data["source"])
+        if "destination" in data and data["destination"]:
+            config.destination = Path(data["destination"])
+        if "temp_folder" in data and data["temp_folder"]:
+            config.temp_folder = Path(data["temp_folder"])
+        return config
+
+    @classmethod
+    def _build_scan(cls, data: dict[str, Any]) -> ScanConfig:
+        """Build ScanConfig from dictionary."""
+        config = ScanConfig()
+        if "image_extensions" in data:
+            config.image_extensions = list(data["image_extensions"])
+        if "video_extensions" in data:
+            config.video_extensions = list(data["video_extensions"])
+        if "raw_extensions" in data:
+            config.raw_extensions = list(data["raw_extensions"])
+        if "skip_exif_errors" in data:
+            config.skip_exif_errors = bool(data["skip_exif_errors"])
+        if "limit" in data:
+            config.limit = int(data["limit"]) if data["limit"] else None
+        return config
+
+    @classmethod
+    def _build_sorting(cls, data: dict[str, Any]) -> SortingConfig:
+        """Build SortingConfig from dictionary."""
+        config = SortingConfig()
+        if "folder_structure" in data:
+            config.folder_structure = data["folder_structure"]
+            # Determine include_day from structure
+            config.include_day = "DD" in config.folder_structure
+        if "fallback_date_priority" in data:
+            config.fallback_date_priority = list(data["fallback_date_priority"])
+        return config
+
+    @classmethod
+    def _build_heuristic(cls, data: dict[str, Any]) -> HeuristicConfig:
+        """Build HeuristicConfig from dictionary."""
+        config = HeuristicConfig()
+        if "enabled" in data:
+            config.enabled = bool(data["enabled"])
+        if "max_days_from_cluster" in data:
+            config.max_days_from_cluster = int(data["max_days_from_cluster"])
+        return config
+
+    @classmethod
+    def _build_folder_tags(cls, data: dict[str, Any]) -> FolderTagsConfig:
+        """Build FolderTagsConfig from dictionary."""
+        config = FolderTagsConfig()
+        if "enabled" in data:
+            config.enabled = bool(data["enabled"])
+        if "tag_format" in data:
+            config.tag_format = data["tag_format"]
+        if "min_length" in data:
+            config.min_length = int(data["min_length"])
+        if "max_length" in data:
+            config.max_length = int(data["max_length"])
+        if "ignore_list" in data:
+            config.ignore_list = list(data["ignore_list"])
+        if "force_list" in data:
+            config.force_list = list(data["force_list"])
+        if "auto_detect" in data:
+            config.auto_detect = bool(data["auto_detect"])
+        if "distance_check" in data:
+            config.distance_check = bool(data["distance_check"])
+        if "distance_threshold" in data:
+            config.distance_threshold = float(data["distance_threshold"])
+        return config
+
+    @classmethod
+    def _build_renaming(cls, data: dict[str, Any]) -> RenamingConfig:
+        """Build RenamingConfig from dictionary."""
+        config = RenamingConfig()
+        if "enabled" in data:
+            config.enabled = bool(data["enabled"])
+        if "pattern" in data:
+            config.pattern = data["pattern"]
+        if "date_format" in data:
+            config.date_format = data["date_format"]
+        if "time_format" in data:
+            config.time_format = data["time_format"]
+        if "lowercase_extensions" in data:
+            config.lowercase_extensions = bool(data["lowercase_extensions"])
+        if "keep_original_if_conflict" in data:
+            config.keep_original_if_conflict = bool(data["keep_original_if_conflict"])
+        return config
+
+    @classmethod
+    def _build_duplicates(cls, data: dict[str, Any]) -> DuplicatesConfig:
+        """Build DuplicatesConfig from dictionary."""
+        config = DuplicatesConfig()
+        if "policy" in data:
+            config.policy = data["policy"]
+        if "hashing_algorithm" in data:
+            config.hashing_algorithm = data["hashing_algorithm"]
+        if "consider_resolution" in data:
+            config.consider_resolution = bool(data["consider_resolution"])
+        if "consider_metadata" in data:
+            config.consider_metadata = bool(data["consider_metadata"])
+        return config
+
+    @classmethod
+    def _build_dry_run(cls, data: dict[str, Any]) -> DryRunConfig:
+        """Build DryRunConfig from dictionary."""
+        config = DryRunConfig()
+        if "show_moves" in data:
+            config.show_moves = bool(data["show_moves"])
+        if "show_renames" in data:
+            config.show_renames = bool(data["show_renames"])
+        if "show_tags" in data:
+            config.show_tags = bool(data["show_tags"])
+        if "show_duplicates" in data:
+            config.show_duplicates = bool(data["show_duplicates"])
+        if "summary_only" in data:
+            config.summary_only = bool(data["summary_only"])
+        return config
+
+    @classmethod
+    def _build_logging(cls, data: dict[str, Any]) -> LoggingConfig:
+        """Build LoggingConfig from dictionary."""
+        config = LoggingConfig()
+        if "level" in data:
+            config.level = data["level"]
+        if "color_output" in data:
+            config.color_output = bool(data["color_output"])
+        if "log_to_file" in data:
+            config.log_to_file = bool(data["log_to_file"])
+        if "file_path" in data:
+            config.file_path = data["file_path"]
+        return config
+
+    @classmethod
+    def _build_performance(cls, data: dict[str, Any]) -> PerformanceConfig:
+        """Build PerformanceConfig from dictionary."""
+        config = PerformanceConfig()
+        if "multiprocessing" in data:
+            config.multiprocessing = bool(data["multiprocessing"])
+        if "max_workers" in data:
+            config.max_workers = int(data["max_workers"])
+        if "chunk_size" in data:
+            config.chunk_size = int(data["chunk_size"])
+        if "enable_cache" in data:
+            config.enable_cache = bool(data["enable_cache"])
+        if "cache_location" in data:
+            config.cache_location = data["cache_location"]
+        return config
+
+    @classmethod
+    def _build_synology(cls, data: dict[str, Any]) -> SynologyConfig:
+        """Build SynologyConfig from dictionary."""
+        config = SynologyConfig()
+        if "safe_fs_mode" in data:
+            config.safe_fs_mode = bool(data["safe_fs_mode"])
+        if "use_long_paths" in data:
+            config.use_long_paths = bool(data["use_long_paths"])
+        if "min_free_space_mb" in data:
+            config.min_free_space_mb = int(data["min_free_space_mb"])
+        return config
+
+    @classmethod
+    def validate(cls, config: ChronoCleanConfig) -> list[str]:
+        """
+        Validate configuration and return list of errors.
+
+        Args:
+            config: Configuration to validate
+
+        Returns:
+            List of error messages (empty if valid)
+        """
+        errors: list[str] = []
+
+        # Validate sorting structure
+        valid_structures = ["YYYY/MM", "YYYY/MM/DD", "YYYY"]
+        if config.sorting.folder_structure not in valid_structures:
+            errors.append(
+                f"Invalid folder_structure: {config.sorting.folder_structure}. "
+                f"Must be one of: {valid_structures}"
+            )
+
+        # Validate fallback priority
+        valid_sources = ["exif", "filesystem", "folder_name", "heuristic"]
+        for source in config.sorting.fallback_date_priority:
+            if source not in valid_sources:
+                errors.append(f"Invalid fallback source: {source}")
+
+        # Validate logging level
+        valid_levels = ["debug", "info", "warning", "error", "critical"]
+        if config.logging.level.lower() not in valid_levels:
+            errors.append(f"Invalid logging level: {config.logging.level}")
+
+        # Validate duplicates policy
+        valid_policies = ["safe", "skip", "overwrite"]
+        if config.duplicates.policy not in valid_policies:
+            errors.append(f"Invalid duplicates policy: {config.duplicates.policy}")
+
+        # Validate thresholds
+        if not 0 <= config.folder_tags.distance_threshold <= 1:
+            errors.append("distance_threshold must be between 0 and 1")
+
+        if config.folder_tags.min_length < 1:
+            errors.append("min_length must be at least 1")
+
+        if config.folder_tags.max_length < config.folder_tags.min_length:
+            errors.append("max_length must be >= min_length")
+
+        return errors
