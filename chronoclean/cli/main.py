@@ -9,9 +9,12 @@ from rich.table import Table
 
 from chronoclean import __version__
 from chronoclean.config import ConfigLoader
+from chronoclean.config.schema import ChronoCleanConfig
 from chronoclean.core.scanner import Scanner
 from chronoclean.core.sorter import Sorter
 from chronoclean.core.renamer import Renamer, ConflictResolver
+from chronoclean.core.folder_tagger import FolderTagger
+from chronoclean.core.date_inference import DateInferenceEngine
 from chronoclean.core.file_operations import FileOperations, BatchOperations
 from chronoclean.core.models import OperationPlan
 from chronoclean.utils.logging import setup_logging
@@ -26,6 +29,10 @@ app = typer.Typer(
 console = Console()
 
 
+# Sentinel value for detecting if CLI option was explicitly set
+UNSET = None
+
+
 @app.callback()
 def main_callback(
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose output"),
@@ -35,11 +42,23 @@ def main_callback(
     setup_logging(level=log_level)
 
 
+def _resolve_bool(cli_value: Optional[bool], config_value: bool) -> bool:
+    """Resolve boolean value: CLI overrides config if explicitly set."""
+    return config_value if cli_value is None else cli_value
+
+
+def _show_config_info(cfg: ChronoCleanConfig, config_path: Optional[Path]) -> None:
+    """Display config file info if one was loaded."""
+    if config_path:
+        console.print(f"[dim]Config: {config_path}[/dim]")
+    console.print()
+
+
 @app.command()
 def scan(
     source: Path = typer.Argument(..., help="Source directory to scan"),
-    recursive: bool = typer.Option(True, "--recursive/--no-recursive", help="Scan subfolders"),
-    videos: bool = typer.Option(True, "--videos/--no-videos", help="Include video files"),
+    recursive: Optional[bool] = typer.Option(None, "--recursive/--no-recursive", help="Scan subfolders"),
+    videos: Optional[bool] = typer.Option(None, "--videos/--no-videos", help="Include video files"),
     limit: Optional[int] = typer.Option(None, "--limit", "-l", help="Limit files (for debugging)"),
     config: Optional[Path] = typer.Option(None, "--config", "-c", help="Config file path"),
     report: bool = typer.Option(False, "--report", "-r", help="Show detailed per-file report"),
@@ -48,9 +67,17 @@ def scan(
     Analyze files in the source directory.
 
     Scans the directory, reads EXIF metadata, infers dates, and detects folder tags.
+    
+    Configuration can be provided via --config flag or by placing a chronoclean.yaml
+    file in the current directory. CLI arguments override config file values.
     """
     # Load configuration
     cfg = ConfigLoader.load(config)
+
+    # Resolve options: CLI overrides config
+    use_recursive = _resolve_bool(recursive, cfg.general.recursive)
+    use_videos = _resolve_bool(videos, cfg.general.include_videos)
+    use_limit = limit if limit is not None else cfg.scan.limit
 
     # Validate source
     source = source.resolve()
@@ -63,17 +90,38 @@ def scan(
         raise typer.Exit(1)
 
     console.print(f"[blue]Scanning:[/blue] {source}")
+    if config:
+        console.print(f"[dim]Config: {config}[/dim]")
     console.print()
 
-    # Create scanner
+    # Create components from config
+    folder_tagger = FolderTagger(
+        ignore_list=cfg.folder_tags.ignore_list,
+        force_list=cfg.folder_tags.force_list,
+        min_length=cfg.folder_tags.min_length,
+        max_length=cfg.folder_tags.max_length,
+        distance_threshold=cfg.folder_tags.distance_threshold,
+    )
+    
+    date_engine = DateInferenceEngine(
+        priority=cfg.sorting.fallback_date_priority,
+    )
+
+    # Create scanner with config values
     scanner = Scanner(
-        recursive=recursive,
-        include_videos=videos,
+        date_engine=date_engine,
+        folder_tagger=folder_tagger,
+        image_extensions=set(cfg.scan.image_extensions),
+        video_extensions=set(cfg.scan.video_extensions),
+        raw_extensions=set(cfg.scan.raw_extensions),
+        recursive=use_recursive,
+        include_videos=use_videos,
+        ignore_hidden=cfg.general.ignore_hidden_files,
     )
 
     # Run scan
     with console.status("[bold blue]Scanning files..."):
-        result = scanner.scan(source, limit=limit)
+        result = scanner.scan(source, limit=use_limit)
 
     # Display results
     console.print()
@@ -163,13 +211,13 @@ def scan(
 def apply(
     source: Path = typer.Argument(..., help="Source directory"),
     destination: Path = typer.Argument(..., help="Destination directory"),
-    dry_run: bool = typer.Option(True, "--dry-run/--no-dry-run", help="Simulate without changes"),
+    dry_run: Optional[bool] = typer.Option(None, "--dry-run/--no-dry-run", help="Simulate without changes"),
     move: bool = typer.Option(False, "--move", help="Move files instead of copy (default: copy)"),
-    rename: bool = typer.Option(False, "--rename/--no-rename", help="Enable file renaming"),
-    tag_names: bool = typer.Option(False, "--tag-names/--no-tag-names", help="Add folder tags"),
-    recursive: bool = typer.Option(True, "--recursive/--no-recursive", help="Scan subfolders"),
-    videos: bool = typer.Option(True, "--videos/--no-videos", help="Include video files"),
-    structure: str = typer.Option("YYYY/MM", "--structure", "-s", help="Folder structure"),
+    rename: Optional[bool] = typer.Option(None, "--rename/--no-rename", help="Enable file renaming"),
+    tag_names: Optional[bool] = typer.Option(None, "--tag-names/--no-tag-names", help="Add folder tags"),
+    recursive: Optional[bool] = typer.Option(None, "--recursive/--no-recursive", help="Scan subfolders"),
+    videos: Optional[bool] = typer.Option(None, "--videos/--no-videos", help="Include video files"),
+    structure: Optional[str] = typer.Option(None, "--structure", "-s", help="Folder structure"),
     force: bool = typer.Option(False, "--force", "-f", help="Skip confirmation"),
     limit: Optional[int] = typer.Option(None, "--limit", "-l", help="Limit files"),
     config: Optional[Path] = typer.Option(None, "--config", "-c", help="Config file path"),
@@ -179,9 +227,21 @@ def apply(
 
     Organizes files into a chronological folder structure based on their dates.
     By default runs in dry-run mode. Use --no-dry-run to perform actual changes.
+    
+    Configuration can be provided via --config flag or by placing a chronoclean.yaml
+    file in the current directory. CLI arguments override config file values.
     """
     # Load configuration
     cfg = ConfigLoader.load(config)
+
+    # Resolve options: CLI overrides config
+    use_dry_run = _resolve_bool(dry_run, cfg.general.dry_run_default)
+    use_rename = _resolve_bool(rename, cfg.renaming.enabled)
+    use_tag_names = _resolve_bool(tag_names, cfg.folder_tags.enabled)
+    use_recursive = _resolve_bool(recursive, cfg.general.recursive)
+    use_videos = _resolve_bool(videos, cfg.general.include_videos)
+    use_structure = structure if structure is not None else cfg.sorting.folder_structure
+    use_limit = limit if limit is not None else cfg.scan.limit
 
     # Validate paths
     source = source.resolve()
@@ -196,29 +256,53 @@ def apply(
         raise typer.Exit(1)
 
     # Show mode
-    mode_text = "[yellow]DRY RUN[/yellow]" if dry_run else "[red]LIVE MODE[/red]"
+    mode_text = "[yellow]DRY RUN[/yellow]" if use_dry_run else "[red]LIVE MODE[/red]"
     operation_text = "[red]MOVE[/red]" if move else "[green]COPY[/green]"
     console.print(f"Mode: {mode_text}")
     console.print(f"Operation: {operation_text}")
     console.print(f"Source: {source}")
     console.print(f"Destination: {destination}")
-    console.print(f"Structure: {structure}")
-    console.print(f"Renaming: {'enabled' if rename else 'disabled'}")
-    console.print(f"Folder tags: {'enabled' if tag_names else 'disabled'}")
+    console.print(f"Structure: {use_structure}")
+    console.print(f"Renaming: {'enabled' if use_rename else 'disabled'}")
+    console.print(f"Folder tags: {'enabled' if use_tag_names else 'disabled'}")
+    if config:
+        console.print(f"[dim]Config: {config}[/dim]")
     console.print()
 
     # Confirmation for live mode
-    if not dry_run and not force:
+    if not use_dry_run and not force:
         action = "move" if move else "copy"
         confirm = typer.confirm(f"This will {action} files. Continue?")
         if not confirm:
             console.print("Aborted.")
             raise typer.Exit(0)
 
+    # Create components from config
+    folder_tagger = FolderTagger(
+        ignore_list=cfg.folder_tags.ignore_list,
+        force_list=cfg.folder_tags.force_list,
+        min_length=cfg.folder_tags.min_length,
+        max_length=cfg.folder_tags.max_length,
+        distance_threshold=cfg.folder_tags.distance_threshold,
+    )
+    
+    date_engine = DateInferenceEngine(
+        priority=cfg.sorting.fallback_date_priority,
+    )
+
     # Scan files
     console.print("[blue]Scanning files...[/blue]")
-    scanner = Scanner(recursive=recursive, include_videos=videos)
-    scan_result = scanner.scan(source, limit=limit)
+    scanner = Scanner(
+        date_engine=date_engine,
+        folder_tagger=folder_tagger,
+        image_extensions=set(cfg.scan.image_extensions),
+        video_extensions=set(cfg.scan.video_extensions),
+        raw_extensions=set(cfg.scan.raw_extensions),
+        recursive=use_recursive,
+        include_videos=use_videos,
+        ignore_hidden=cfg.general.ignore_hidden_files,
+    )
+    scan_result = scanner.scan(source, limit=use_limit)
 
     if not scan_result.files:
         console.print("[yellow]No files found to process.[/yellow]")
@@ -229,9 +313,20 @@ def apply(
 
     # Build operation plan
     console.print("[blue]Building operation plan...[/blue]")
-    sorter = Sorter(destination, folder_structure=structure)
-    renamer = Renamer() if rename else None
-    conflict_resolver = ConflictResolver(renamer) if rename else None
+    sorter = Sorter(destination, folder_structure=use_structure)
+    
+    # Configure renamer from config
+    renamer = None
+    conflict_resolver = None
+    if use_rename:
+        renamer = Renamer(
+            pattern=cfg.renaming.pattern,
+            date_format=cfg.renaming.date_format,
+            time_format=cfg.renaming.time_format,
+            tag_format=cfg.renaming.tag_part_format,
+            lowercase_ext=cfg.renaming.lowercase_extensions,
+        )
+        conflict_resolver = ConflictResolver(renamer)
 
     plan = OperationPlan()
     files_with_dates = 0
@@ -250,8 +345,8 @@ def apply(
 
         # Determine filename
         new_filename = None
-        if rename and renamer and conflict_resolver:
-            tag = record.folder_tag if tag_names and record.folder_tag_usable else None
+        if use_rename and renamer and conflict_resolver:
+            tag = record.folder_tag if use_tag_names and record.folder_tag_usable else None
             new_filename = conflict_resolver.resolve(
                 record.source_path,
                 record.detected_date,
@@ -298,7 +393,7 @@ def apply(
         console.print()
 
     # Execute operations
-    if dry_run:
+    if use_dry_run:
         console.print("[yellow]Dry run complete. No files were modified.[/yellow]")
         console.print("Run with --no-dry-run to apply changes.")
     else:

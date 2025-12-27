@@ -262,6 +262,36 @@ python3 -m chronoclean apply /volume1/unsorted /volume1/photos --no-dry-run --mo
 
 ---
 
+## Configuration
+
+ChronoClean can be configured via YAML files. Create a `chronoclean.yaml` in your project root:
+
+```yaml
+# Minimal config example
+sorting:
+  folder_structure: "YYYY/MM/DD"
+
+folder_tags:
+  enabled: true
+  ignore_list: ["tosort", "misc", "temp"]
+
+renaming:
+  enabled: true
+  pattern: "{date}_{time}"
+```
+
+**Config file search order:**
+1. `--config <path>` argument
+2. `chronoclean.yaml` in current directory
+3. `.chronoclean/config.yaml`
+4. Built-in defaults
+
+**CLI arguments always override config file values.**
+
+📄 **See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for complete configuration reference.**
+
+---
+
 
 ## Roadmap
 

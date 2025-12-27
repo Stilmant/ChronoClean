@@ -1,12 +1,24 @@
 # ChronoClean default configuration
+# Copy this file to your project root as 'chronoclean.yaml' to use it
+# 
+# Config file search order:
+#   1. --config <path> argument (explicit)
+#   2. chronoclean.yaml in current directory
+#   3. chronoclean.yml in current directory
+#   4. .chronoclean/config.yaml
+#   5. .chronoclean/config.yml
+#   6. Built-in defaults (no file needed)
+#
+# CLI arguments always override config file values.
+
 version: 1.0
 
 general:
   timezone: "local"
-  recursive: true
-  include_videos: true
-  ignore_hidden_files: true
-  dry_run_default: true
+  recursive: true           # Scan subdirectories
+  include_videos: true      # Include video files
+  ignore_hidden_files: true # Skip files/folders starting with '.'
+  dry_run_default: true     # Default to dry-run mode (safe)
   output_folder: ".chronoclean"
 
 paths:
