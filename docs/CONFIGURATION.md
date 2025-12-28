@@ -14,10 +14,13 @@ chronoclean config init
 chronoclean config init --full
 ```
 
-**Option 2: Copy a sample config**
+**Option 2: Manual creation**
 
-```bash
-cp configs/chronoclean.minimal.yaml chronoclean.yaml
+Create a `chronoclean.yaml` file in your project directory with the following minimal content:
+
+```yaml
+sorting:
+  folder_structure: "YYYY/MM"
 ```
 
 Then edit the file and run ChronoClean:
@@ -311,7 +314,7 @@ ChronoClean validates your config on load. Common errors:
 
 ## Sample Config Files
 
-See the `configs/` folder for examples:
+Use the `config init` command to generate sample configuration files:
 
-- `chronoclean.default.yaml` — Full config with all options documented
-- `chronoclean.minimal.yaml` — Minimal config showing only essentials
+- `chronoclean config init` — Minimal config showing only essentials
+- `chronoclean config init --full` — Full config with all options documented

@@ -1,5 +1,9 @@
-**ChronoClean — CLI Command Map**
+**ChronoClean - CLI Command Map**
 =================================
+
+Note: As of v0.2, the implemented commands are `scan`, `export`, `apply`, `config`, and `version`.
+`dryrun`, `tags`, `report`, and `hash` are planned for later phases per the roadmap and are documented here
+as forward-looking commands.
 
 ChronoClean follows a 4-phase workflow:
 

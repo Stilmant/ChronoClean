@@ -16,10 +16,72 @@ from chronoclean.core.sorter import Sorter
 from chronoclean.core.renamer import Renamer, ConflictResolver
 from chronoclean.core.folder_tagger import FolderTagger
 from chronoclean.core.date_inference import DateInferenceEngine
-from chronoclean.core.file_operations import FileOperations, BatchOperations
+from chronoclean.core.file_operations import FileOperations, BatchOperations, FileOperationError
 from chronoclean.core.models import OperationPlan
 from chronoclean.core.exporter import Exporter, export_to_json, export_to_csv
+from chronoclean.core.duplicate_checker import DuplicateChecker
 from chronoclean.utils.logging import setup_logging
+
+# Initialize console
+console = Console()
+
+
+def _build_date_priority(cfg: ChronoCleanConfig) -> list[str]:
+    """
+    Build date inference priority list including filename based on config.
+    
+    The filename_date.priority setting determines where "filename" is inserted:
+    - "before_exif": filename checked first
+    - "after_exif": filename checked after exif but before filesystem
+    - "after_filesystem": filename checked after filesystem but before folder_name
+    
+    Args:
+        cfg: ChronoClean configuration
+        
+    Returns:
+        Priority list for DateInferenceEngine
+    """
+    base_priority = list(cfg.sorting.fallback_date_priority)
+    
+    # Only add filename to priority if enabled
+    if not cfg.filename_date.enabled:
+        # Strip "filename" if user had it in fallback_date_priority but disabled the feature
+        return [p for p in base_priority if p != "filename"]
+    
+    # Don't add if already present
+    if "filename" in base_priority:
+        return base_priority
+    
+    priority_setting = cfg.filename_date.priority
+    
+    if priority_setting == "before_exif":
+        # Insert at the beginning
+        return ["filename"] + base_priority
+    elif priority_setting == "after_exif":
+        # Insert after exif if present, otherwise at position 1
+        if "exif" in base_priority:
+            idx = base_priority.index("exif") + 1
+            return base_priority[:idx] + ["filename"] + base_priority[idx:]
+        else:
+            return ["filename"] + base_priority
+    elif priority_setting == "after_filesystem":
+        # Insert after filesystem if present
+        if "filesystem" in base_priority:
+            idx = base_priority.index("filesystem") + 1
+            return base_priority[:idx] + ["filename"] + base_priority[idx:]
+        elif "exif" in base_priority:
+            idx = base_priority.index("exif") + 1
+            return base_priority[:idx] + ["filename"] + base_priority[idx:]
+        else:
+            return base_priority + ["filename"]
+    else:
+        # Default: after_exif behavior
+        if "exif" in base_priority:
+            idx = base_priority.index("exif") + 1
+            return base_priority[:idx] + ["filename"] + base_priority[idx:]
+        else:
+            return ["filename"] + base_priority
+
 
 app = typer.Typer(
     name="chronoclean",
@@ -43,8 +105,6 @@ export_app = typer.Typer(
     no_args_is_help=True,
 )
 app.add_typer(export_app, name="export")
-
-console = Console()
 
 
 # Sentinel value for detecting if CLI option was explicitly set
@@ -122,7 +182,9 @@ def scan(
     )
     
     date_engine = DateInferenceEngine(
-        priority=cfg.sorting.fallback_date_priority,
+        priority=_build_date_priority(cfg),
+        year_cutoff=cfg.filename_date.year_cutoff,
+        filename_date_enabled=cfg.filename_date.enabled,
     )
 
     # Create scanner with config values
@@ -135,6 +197,8 @@ def scan(
         recursive=use_recursive,
         include_videos=use_videos,
         ignore_hidden=cfg.general.ignore_hidden_files,
+        date_mismatch_enabled=cfg.date_mismatch.enabled,
+        date_mismatch_threshold_days=cfg.date_mismatch.threshold_days,
     )
 
     # Run scan
@@ -305,7 +369,9 @@ def apply(
     )
     
     date_engine = DateInferenceEngine(
-        priority=cfg.sorting.fallback_date_priority,
+        priority=_build_date_priority(cfg),
+        year_cutoff=cfg.filename_date.year_cutoff,
+        filename_date_enabled=cfg.filename_date.enabled,
     )
 
     # Scan files
@@ -319,6 +385,8 @@ def apply(
         recursive=use_recursive,
         include_videos=use_videos,
         ignore_hidden=cfg.general.ignore_hidden_files,
+        date_mismatch_enabled=cfg.date_mismatch.enabled,
+        date_mismatch_threshold_days=cfg.date_mismatch.threshold_days,
     )
     scan_result = scanner.scan(source, limit=use_limit)
 
@@ -416,21 +484,93 @@ def apply(
         console.print("Run with --no-dry-run to apply changes.")
     else:
         console.print("[blue]Executing operations...[/blue]")
+        
+        # Initialize duplicate checker if enabled
+        duplicate_checker = None
+        if cfg.duplicates.enabled:
+            duplicate_checker = DuplicateChecker(
+                algorithm=cfg.duplicates.hashing_algorithm,
+                cache_enabled=cfg.duplicates.cache_hashes,
+            )
+        
         file_ops = FileOperations(dry_run=False)
         batch = BatchOperations(file_ops, dry_run=False)
 
-        operations = [(op.source, op.destination_path) for op in plan.moves]
+        # Process operations with collision detection
+        # Track reserved destinations AND their source files for content comparison
+        operations_to_execute = []
+        reserved_destinations: set[Path] = set()
+        reserved_sources: dict[Path, Path] = {}  # dest_path -> source_path
+        duplicates_skipped = 0
+        collisions_renamed = 0
+        
+        try:
+            for op in plan.moves:
+                dest_path = op.destination_path
+                
+                # Check if destination already exists on disk OR is reserved by another operation
+                if dest_path.exists() or dest_path in reserved_destinations:
+                    if duplicate_checker and cfg.duplicates.on_collision == "check_hash":
+                        # Check if files are duplicates
+                        if dest_path.exists():
+                            # Compare against existing file on disk
+                            if duplicate_checker.are_duplicates(op.source, dest_path):
+                                duplicates_skipped += 1
+                                continue
+                        elif dest_path in reserved_sources:
+                            # Compare against the source file that reserved this destination
+                            if duplicate_checker.are_duplicates(op.source, reserved_sources[dest_path]):
+                                duplicates_skipped += 1
+                                continue
+                        # Files have same name but different content - rename
+                        dest_path = file_ops.ensure_unique_path(dest_path, reserved_destinations)
+                        collisions_renamed += 1
+                    elif cfg.duplicates.on_collision == "rename":
+                        # Always rename on collision
+                        dest_path = file_ops.ensure_unique_path(dest_path, reserved_destinations)
+                        collisions_renamed += 1
+                    elif cfg.duplicates.on_collision == "skip":
+                        # Skip if destination exists or reserved
+                        duplicates_skipped += 1
+                        continue
+                    elif cfg.duplicates.on_collision == "fail":
+                        console.print(f"[red]Error:[/red] Destination exists or reserved: {dest_path}")
+                        raise typer.Exit(1)
+                    else:
+                        # Default: check_hash behavior
+                        if duplicate_checker:
+                            if dest_path.exists():
+                                if duplicate_checker.are_duplicates(op.source, dest_path):
+                                    duplicates_skipped += 1
+                                    continue
+                            elif dest_path in reserved_sources:
+                                if duplicate_checker.are_duplicates(op.source, reserved_sources[dest_path]):
+                                    duplicates_skipped += 1
+                                    continue
+                        dest_path = file_ops.ensure_unique_path(dest_path, reserved_destinations)
+                        collisions_renamed += 1
+                
+                reserved_destinations.add(dest_path)
+                reserved_sources[dest_path] = op.source
+                operations_to_execute.append((op.source, dest_path))
+        except FileOperationError as e:
+            console.print(f"[red]Error:[/red] {e}", stderr=True)
+            raise typer.Exit(1)
         
         if move:
-            success, failed = batch.execute_moves(operations)
+            success, failed = batch.execute_moves(operations_to_execute)
             action_word = "moved"
         else:
-            success, failed = batch.execute_copies(operations)
+            success, failed = batch.execute_copies(operations_to_execute)
             action_word = "copied"
 
         console.print()
         console.print("[bold green]Complete![/bold green]")
         console.print(f"  Successfully {action_word}: {success}")
+        if duplicates_skipped:
+            console.print(f"  [yellow]Duplicates skipped: {duplicates_skipped}[/yellow]")
+        if collisions_renamed:
+            console.print(f"  [yellow]Collisions renamed: {collisions_renamed}[/yellow]")
         if failed:
             console.print(f"  [red]Failed: {failed}[/red]")
 
@@ -614,7 +754,9 @@ def _perform_scan(
     )
     
     date_engine = DateInferenceEngine(
-        priority=cfg.sorting.fallback_date_priority,
+        priority=_build_date_priority(cfg),
+        year_cutoff=cfg.filename_date.year_cutoff,
+        filename_date_enabled=cfg.filename_date.enabled,
     )
 
     # Create scanner with config values
@@ -627,6 +769,8 @@ def _perform_scan(
         recursive=use_recursive,
         include_videos=use_videos,
         ignore_hidden=cfg.general.ignore_hidden_files,
+        date_mismatch_enabled=cfg.date_mismatch.enabled,
+        date_mismatch_threshold_days=cfg.date_mismatch.threshold_days,
     )
 
     # Run scan
@@ -735,10 +879,10 @@ def export_csv(
     # Load configuration
     cfg = ConfigLoader.load(config)
     
-    console.print(f"[blue]Scanning:[/blue] {source}", err=True)
+    console.print(f"[blue]Scanning:[/blue] {source}", stderr=True)
     if config:
-        console.print(f"[dim]Config: {config}[/dim]", err=True)
-    console.print(err=True)
+        console.print(f"[dim]Config: {config}[/dim]", stderr=True)
+    console.print(stderr=True)
     
     # Perform scan
     result = _perform_scan(source, cfg, recursive, videos, limit)
@@ -750,8 +894,8 @@ def export_csv(
     csv_str = exporter.to_csv(result, output)
     
     if output:
-        console.print(f"[green]Exported to:[/green] {output}", err=True)
-        console.print(f"[dim]Files: {len(result.files)}[/dim]", err=True)
+        console.print(f"[green]Exported to:[/green] {output}", stderr=True)
+        console.print(f"[dim]Files: {len(result.files)}[/dim]", stderr=True)
     else:
         # Output to stdout (without rich formatting)
         print(csv_str, end="")

@@ -140,12 +140,18 @@ class FileOperations:
             logger.error(f"Failed to copy {source}: {e}")
             return False, f"Copy failed: {e}"
 
-    def ensure_unique_path(self, path: Path) -> Path:
+    def ensure_unique_path(
+        self, path: Path, reserved: set[Path] | None = None
+    ) -> Path:
         """
         Ensure the path is unique by adding suffix if needed.
 
+        Checks both the filesystem and an optional set of reserved paths
+        (e.g., destinations already planned in a batch operation).
+
         Args:
             path: Desired file path
+            reserved: Optional set of paths already reserved by planned operations
 
         Returns:
             Unique path (may be same as input if already unique)
@@ -153,7 +159,9 @@ class FileOperations:
         Example:
             "photo.jpg" exists → "photo_001.jpg"
         """
-        if not path.exists():
+        reserved = reserved or set()
+        
+        if not path.exists() and path not in reserved:
             return path
 
         stem = path.stem
@@ -165,7 +173,7 @@ class FileOperations:
             new_name = f"{stem}_{counter:03d}{suffix}"
             new_path = parent / new_name
 
-            if not new_path.exists():
+            if not new_path.exists() and new_path not in reserved:
                 return new_path
 
             counter += 1

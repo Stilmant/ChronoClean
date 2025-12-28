@@ -41,6 +41,8 @@ class Scanner:
         include_raw: bool = True,
         recursive: bool = True,
         ignore_hidden: bool = True,
+        date_mismatch_enabled: bool = True,
+        date_mismatch_threshold_days: int = 1,
     ):
         """
         Initialize the scanner.
@@ -56,6 +58,8 @@ class Scanner:
             include_raw: Whether to include RAW files
             recursive: Whether to scan subdirectories
             ignore_hidden: Whether to skip hidden files/folders
+            date_mismatch_enabled: Whether to detect date mismatches between filename and EXIF
+            date_mismatch_threshold_days: Minimum difference in days to flag as mismatch
         """
         self.exif_reader = exif_reader or ExifReader()
         self.date_engine = date_engine or DateInferenceEngine(exif_reader=self.exif_reader)
@@ -69,6 +73,8 @@ class Scanner:
         self.include_raw = include_raw
         self.recursive = recursive
         self.ignore_hidden = ignore_hidden
+        self.date_mismatch_enabled = date_mismatch_enabled
+        self.date_mismatch_threshold_days = date_mismatch_threshold_days
 
     @property
     def supported_extensions(self) -> set[str]:
@@ -226,11 +232,11 @@ class Scanner:
         if filename_date:
             record.filename_date = filename_date
             
-            # Check for date mismatch if we have both dates
-            if detected_date and filename_date:
+            # Check for date mismatch if enabled and we have both dates
+            if self.date_mismatch_enabled and detected_date and filename_date:
                 # Calculate the difference in days
                 delta = abs((detected_date - filename_date).days)
-                if delta > 0:
+                if delta >= self.date_mismatch_threshold_days:
                     record.date_mismatch = True
                     record.date_mismatch_days = delta
 

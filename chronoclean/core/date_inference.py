@@ -71,6 +71,7 @@ class DateInferenceEngine:
         priority: Optional[list[str]] = None,
         exif_reader: Optional[ExifReader] = None,
         year_cutoff: int = 30,
+        filename_date_enabled: bool = True,
     ):
         """
         Initialize the date inference engine.
@@ -80,10 +81,12 @@ class DateInferenceEngine:
                       Default: ["exif", "filesystem", "folder_name"]
             exif_reader: ExifReader instance (optional, created if not provided)
             year_cutoff: For 2-digit years: 00-cutoff = 2000s, cutoff-99 = 1900s
+            filename_date_enabled: Whether to extract dates from filenames
         """
         self.priority = priority or ["exif", "filesystem", "folder_name"]
         self.exif_reader = exif_reader or ExifReader()
         self.year_cutoff = year_cutoff
+        self.filename_date_enabled = filename_date_enabled
 
         # Map source names to methods
         self._source_methods = {
@@ -130,8 +133,10 @@ class DateInferenceEngine:
             file_path: Path to the file
 
         Returns:
-            datetime or None
+            datetime or None (also returns None if filename_date_enabled=False)
         """
+        if not self.filename_date_enabled:
+            return None
         result = self._get_filename_date(file_path)
         if result:
             return result[0]
@@ -208,7 +213,12 @@ class DateInferenceEngine:
         - 2024-03-15_photo.jpg (YYYY-MM-DD)
         - IMG-20240315-WA0001.jpg (WhatsApp)
         - Screenshot_20240315_143000.png (Screenshots)
+        
+        Returns None if filename_date_enabled is False.
         """
+        if not self.filename_date_enabled:
+            return None
+            
         filename = file_path.stem  # Filename without extension
 
         for pattern, date_type in FILENAME_DATE_PATTERNS:
