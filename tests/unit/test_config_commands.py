@@ -27,8 +27,8 @@ class TestConfigInit:
         
         content = config_file.read_text()
         assert "sorting:" in content
-        # Minimal config should be short
-        assert len(content.splitlines()) < 20
+        # Minimal config should be reasonably short (includes v0.2 commented options)
+        assert len(content.splitlines()) < 35
     
     def test_init_full_creates_complete_config(self, tmp_path, monkeypatch):
         """config init --full creates full config with all options."""

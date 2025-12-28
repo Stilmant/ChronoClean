@@ -207,8 +207,57 @@ renaming:
 
 ```yaml
 duplicates:
-  policy: "safe"              # safe, skip, overwrite
+  enabled: true               # Enable duplicate detection
   hashing_algorithm: "sha256" # sha256, md5
+  on_collision: "check_hash"  # check_hash, rename, skip, fail
+```
+
+**Collision strategies:**
+| Strategy | Behavior |
+|----------|----------|
+| `check_hash` | Compare file hashes; skip if identical, rename if different |
+| `rename` | Always rename colliding files (add counter suffix) |
+| `skip` | Skip all files that would collide |
+| `fail` | Stop with error on first collision |
+
+### `filename_date` — Filename Date Parsing (v0.2)
+
+Extract dates embedded in filenames like `IMG_20240315_143000.jpg`.
+
+```yaml
+filename_date:
+  enabled: true               # Enable filename date extraction
+  year_cutoff: 30             # 2-digit year: 00-30 = 2000s, 31-99 = 1900s
+  priority: "after_exif"      # When to try filename in date inference
+```
+
+**Priority options:**
+| Value | Behavior |
+|-------|----------|
+| `before_exif` | Try filename first (before EXIF) |
+| `after_exif` | Try filename after EXIF but before filesystem |
+| `after_filesystem` | Try filename after filesystem date |
+
+### `date_mismatch` — Date Mismatch Detection (v0.2)
+
+Detect when a file's filename date doesn't match its EXIF/filesystem date.
+
+```yaml
+date_mismatch:
+  enabled: true               # Enable mismatch detection
+  threshold_days: 1           # Days difference to flag as mismatch
+```
+
+Mismatches are flagged in scan results and exports, helping identify
+renamed files or files with incorrect EXIF data.
+
+### `export` — Export Settings (v0.2)
+
+```yaml
+export:
+  default_format: "json"      # json, csv
+  include_statistics: true    # Include summary stats in export
+  pretty_print: true          # Format JSON with indentation
 ```
 
 ### `logging` — Logging Settings

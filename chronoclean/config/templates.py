@@ -17,6 +17,17 @@ sorting:
 # renaming:
 #   enabled: true
 #   pattern: "{date}_{time}"
+
+# filename_date:
+#   enabled: true              # Extract dates from filenames (v0.2)
+#   priority: "after_exif"     # before_exif, after_exif, after_filesystem
+
+# date_mismatch:
+#   enabled: true              # Detect date mismatches (v0.2)
+#   threshold_days: 1
+
+# duplicates:
+#   on_collision: "check_hash" # check_hash, rename, skip, fail
 '''
 
 FULL_CONFIG = '''\
@@ -123,8 +134,26 @@ renaming:
 # DUPLICATE HANDLING
 # ============================================================================
 duplicates:
-  policy: "safe"              # safe, skip, overwrite
+  enabled: true               # Enable duplicate detection on collision
   hashing_algorithm: "sha256" # sha256, md5
+  on_collision: "check_hash"  # check_hash, rename, skip, fail
+
+# ============================================================================
+# FILENAME DATE PARSING (v0.2)
+# Extract dates from filenames like IMG_20240315_143000.jpg
+# ============================================================================
+filename_date:
+  enabled: true               # Enable filename date extraction
+  year_cutoff: 30             # 2-digit year: 00-30 = 2000s, 31-99 = 1900s
+  priority: "after_exif"      # before_exif, after_exif, after_filesystem
+
+# ============================================================================
+# DATE MISMATCH DETECTION (v0.2)
+# Flag files where filename date differs from EXIF/filesystem date
+# ============================================================================
+date_mismatch:
+  enabled: true               # Enable mismatch detection
+  threshold_days: 1           # Days difference to flag as mismatch
 
 # ============================================================================
 # LOGGING
