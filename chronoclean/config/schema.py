@@ -109,12 +109,12 @@ class DuplicatesConfig:
     """Duplicate handling configuration settings."""
 
     enabled: bool = True
-    policy: str = "safe"  # safe, skip, overwrite
+    policy: str = "safe"  # Planned: safe, skip, overwrite (currently unused)
     hashing_algorithm: str = "sha256"  # sha256, md5
     on_collision: str = "check_hash"  # check_hash, rename, skip, fail
-    consider_resolution: bool = True
-    consider_metadata: bool = True
-    cache_hashes: bool = True
+    consider_resolution: bool = True  # Planned: compare image dimensions
+    consider_metadata: bool = True  # Planned: compare EXIF metadata
+    cache_hashes: bool = True  # Planned: persistent hash cache
 
 
 @dataclass
@@ -141,13 +141,17 @@ class DateMismatchConfig:
 
     enabled: bool = True
     threshold_days: int = 1
-    warn_on_scan: bool = True
-    include_in_export: bool = True
+    warn_on_scan: bool = True  # Planned: show warnings during scan
+    include_in_export: bool = True  # Planned: conditionally include in export
 
 
 @dataclass
 class ExportConfig:
-    """Export configuration (v0.2)."""
+    """Export configuration (v0.2).
+    
+    Note: These are planned to be used as defaults when CLI options
+    are not specified. Currently, CLI options have their own defaults.
+    """
 
     default_format: str = "json"  # json, csv
     include_statistics: bool = True

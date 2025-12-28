@@ -49,9 +49,11 @@ Options:
 
 - `--recursive / --no-recursive` — Scan subfolders (default: recursive)
 - `--videos / --no-videos` — Include video files
-- `--skip-exif-errors` — Ignore corrupted EXIF
-- `--infer-dates` — Try folder-name or heuristic date inference
 - `--limit N` — Scan only first N files (debugging)
+- `--config PATH` — Specify config file path
+
+Note: EXIF error handling and date inference are controlled via config file
+(`scan.skip_exif_errors`, `filename_date.enabled`).
 
 Output:
 
@@ -69,16 +71,22 @@ Usage:
 
 Options:
 
-- `--output PATH` — Where to save the plan
-- `--include-duplicates` — Include duplicate analysis
-- `--include-folder-tags` — Include raw folder-tag detection
-- `--flat` — One-line-per-file CSV export
+- `--output PATH` / `-o PATH` — Where to save the plan (default: stdout)
+- `--statistics / --no-statistics` — Include summary statistics (JSON only)
+- `--pretty / --no-pretty` — Pretty-print JSON output (JSON only)
+- `--recursive / --no-recursive` — Scan subfolders
+- `--videos / --no-videos` — Include video files
+- `--limit N` — Limit files (debugging)
+- `--config PATH` — Specify config file path
+
+Note: Duplicate detection occurs during `apply`, not during export.
+Folder tags are detected during scan/apply, but the export output does not currently include folder tag fields (planned).
 
 Output example:
 
 `.chronoclean/plan.json`, `.chronoclean/plan.csv`
 
-3. **dryrun**
+3. **dryrun** (Planned)
 ---------
 
 Simulate the entire operation.
@@ -87,7 +95,7 @@ Usage:
 
 `chronoclean dryrun`
 
-Options:
+Planned Options:
 
 - `--from-plan PATH` — Use a specific plan file
 - `--summary` — Print only summary (no full logs)
@@ -96,6 +104,8 @@ Options:
 - `--show-tags` — Display inferred or applied folder tags
 - `--color / --no-color` — Output formatting
 
+*Note: Currently, use `apply --dry-run` for simulation.*
+
 4. **apply**
 --------
 
@@ -103,22 +113,32 @@ Perform the real operations: moving, renaming, resolving conflicts.
 
 Usage:
 
-`chronoclean apply`
+`chronoclean apply <source> <destination>`
 
-Options:
+Implemented Options:
 
-- `--from-plan PATH` — Use a specific plan
+- `--dry-run / --no-dry-run` — Simulate without changes (default: dry-run)
+- `--move` — Move files instead of copy (default: copy)
+- `--rename / --no-rename` — Enable file renaming
+- `--tag-names / --no-tag-names` — Add folder tags to filenames
+- `--recursive / --no-recursive` — Scan subfolders
+- `--videos / --no-videos` — Include video files
+- `--structure` — Folder structure (YYYY/MM, YYYY/MM/DD, etc.)
 - `--force` — Skip confirmation
+- `--limit N` — Limit files (debugging)
+- `--config PATH` — Config file path
+
+Planned Options:
+
+- `--from-plan PATH` — Use a specific plan file
 - `--preserve-names` — Do not rename files, only move
-- `--rename` — Enable renaming rules
-- `--tag-names` — Add folder-based tags to filenames
-- `--no-tag-names` — Explicitly disable tagging
-- `--conflict-strategy` — Strategy for handling conflicts
+- `--conflict-strategy` — Strategy for handling conflicts (use config for now)
 
 Safeguards:
 
 - Confirmation prompt unless `--force`
 - Keeps backups in `.chronoclean/backups/` (if enabled)
+- Duplicate handling occurs during apply based on `duplicates.on_collision` config
 
 Folder Tag Management Commands
 =============================

@@ -16,7 +16,7 @@
 | Date mismatch detection | ✅ Done | Scanner now detects mismatches |
 | Export to JSON | ✅ Done | `chronoclean export json` command |
 | Export to CSV | ✅ Done | `chronoclean export csv` command |
-| Hash-based duplicate detection | ✅ Done | DuplicateChecker module |
+| Hash-based duplicate detection | ✅ Done | DuplicateChecker; runs on collision during apply |
 | Config show command | ✅ Done | v0.1 feature |
 | New FileRecord fields | ✅ Done | filename_date, date_mismatch, file_hash |
 | New config sections | ✅ Done | FilenameDateConfig, DateMismatchConfig, ExportConfig |
@@ -236,7 +236,7 @@ date_mismatch:
 ```yaml
 duplicates:
   enabled: true
-  algorithm: "sha256"  # sha256, md5, xxhash
+  algorithm: "sha256"  # sha256, md5
   on_collision: "check_hash"  # check_hash, rename, skip, fail
   cache_hashes: true
 ```
@@ -599,11 +599,14 @@ class ExportConfig:
 
 ## Dependencies
 
-### New Dependencies
+### Core Dependencies
 
 | Package | Purpose | Required |
 |---------|---------|----------|
-| `xxhash` | Fast hashing for large files | Optional |
+| `exifread` | EXIF metadata extraction | Yes |
+| `typer` | CLI framework | Yes |
+| `pyyaml` | Config file parsing | Yes |
+| `rich` | Terminal formatting | Yes |
 
 ### Updated pyproject.toml
 
@@ -618,9 +621,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-fast = [
-    "xxhash>=3.0.0",  # Optional: faster hashing
-]
 dev = [
     "pytest>=7.0.0",
     "pytest-mock>=3.0.0",

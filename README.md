@@ -82,21 +82,16 @@ ChronoClean does not attempt complex AI deduplication or modification of image c
 ### Dry Run System
 Two levels:
 - **Dry-run console output**: shows exactly what would be done, without making changes
-- **Extended export report**: JSON or CSV including:
-  - source path
-  - detected date
-  - inferred tags
-  - rename suggestion
-  - proposed final path
-  - folder tag classification (use/ignore)
-  - conflict analysis
-  - duplicate warnings
+- **Export report**: JSON or CSV including:
+  - source path and filename
+  - detected date and date source (EXIF, filesystem, filename)
+  - date mismatch detection (when filename date ≠ EXIF/file date)
 
-This export can be manually edited to refine rules before applying changes.
+This export can be reviewed before applying changes.
 
 ### Duplicate Management
 - Only checked when needed (filename clash after sorting/renaming)
-- Uses SHA256 or xxHash for fast, reliable comparison
+- Uses SHA256 for reliable comparison (MD5 optional via config)
 - If same hash → skip second copy
 - If different → rename second file safely to avoid collision
 
@@ -154,11 +149,8 @@ ChronoClean allows you to:
 - Ignore folder names that are not informative
 - Detect if the folder name is already present in filenames (using a similarity/distance check)
 
-The export mode lists all folder names and lets you choose:
-- use as tag
-- ignore
-- enforce
-- never use again
+Folder tag detection is automatic during scan and apply. Configuration allows setting
+ignore/force lists to control which folder names are used as tags.
 
 4. **Duplicate handling**
 
@@ -214,9 +206,9 @@ The following libraries are recommended but not mandatory:
 - **hachoir** or **ffmpeg** (video metadata):
   - **hachoir** is a Python library for parsing and extracting metadata from many binary formats, including some video files.
   - **ffmpeg** is a command-line tool (can be called from Python) that extracts metadata from virtually any video or audio file, and is more comprehensive for multimedia.
-- **xxhash** or **hashlib** (fast hashing):
-  - **xxhash** is a very fast non-cryptographic hash, useful for quickly comparing large files (e.g., for duplicate detection).
-  - **hashlib** provides cryptographic hashes (SHA256, MD5, etc.) and is included in Python’s standard library; it is slower but more secure and portable.
+- **hashlib** (hashing):
+  - Provides cryptographic hashes (SHA256, MD5) for duplicate detection.
+  - Included in Python's standard library; reliable and portable.
 - **Typer** or **Argparse** (CLI):
   - **Typer** is a modern, user-friendly CLI framework based on Python type hints, making it easy to build intuitive command-line tools.
   - **Argparse** is Python’s built-in CLI parser, stable and widely supported, but with a more traditional interface.
@@ -321,14 +313,14 @@ ChronoClean development follows a phased approach from prototype to production-r
 - ✅ Detailed scan report (`--report` flag)
 
 ### v0.2 – Export & Duplicate Detection
-- Filename date parsing (detect dates in filenames like `IMG_090831.jpg`)
-- Date mismatch warnings (when filename date ≠ EXIF/file date)
-- Export plan: JSON/CSV with detected dates, tags, rename suggestions, conflicts
-- `export` command with `json` and `csv` subcommands
-- Hash-based duplicate detection on filename collision (SHA256/xxHash)
-- Conflict resolution strategies (keep first, keep newest, rename)
-- `report` command for detailed analysis output
-- `config show` command to display current configuration
+- ✅ Filename date parsing (detect dates in filenames like `IMG_090831.jpg`)
+- ✅ Date mismatch detection (when filename date ≠ EXIF/file date)
+- ✅ Export: JSON/CSV with detected dates, tags, target paths, mismatch info
+- ✅ `export` command with `json` and `csv` subcommands
+- ✅ Hash-based duplicate detection on filename collision (SHA256)
+- ✅ Collision resolution strategies: check_hash, rename, skip, fail
+- ✅ `config show` command to display current configuration
+- Planned: `report` command for detailed analysis output
 
 ### v0.3 – Video & Advanced Metadata
 - Video metadata extraction (hachoir or ffmpeg-python)

@@ -16,6 +16,7 @@ from chronoclean.core.sorter import Sorter
 from chronoclean.core.renamer import Renamer, ConflictResolver
 from chronoclean.core.folder_tagger import FolderTagger
 from chronoclean.core.date_inference import DateInferenceEngine
+from chronoclean.core.exif_reader import ExifReader
 from chronoclean.core.file_operations import FileOperations, BatchOperations, FileOperationError
 from chronoclean.core.models import OperationPlan
 from chronoclean.core.exporter import Exporter, export_to_json, export_to_csv
@@ -173,6 +174,8 @@ def scan(
     console.print()
 
     # Create components from config
+    exif_reader = ExifReader(skip_errors=cfg.scan.skip_exif_errors)
+    
     folder_tagger = FolderTagger(
         ignore_list=cfg.folder_tags.ignore_list,
         force_list=cfg.folder_tags.force_list,
@@ -183,6 +186,7 @@ def scan(
     
     date_engine = DateInferenceEngine(
         priority=_build_date_priority(cfg),
+        exif_reader=exif_reader,
         year_cutoff=cfg.filename_date.year_cutoff,
         filename_date_enabled=cfg.filename_date.enabled,
     )
@@ -368,10 +372,12 @@ def apply(
         distance_threshold=cfg.folder_tags.distance_threshold,
     )
     
+    exif_reader = ExifReader(skip_errors=cfg.scan.skip_exif_errors)
     date_engine = DateInferenceEngine(
         priority=_build_date_priority(cfg),
         year_cutoff=cfg.filename_date.year_cutoff,
         filename_date_enabled=cfg.filename_date.enabled,
+        exif_reader=exif_reader,
     )
 
     # Scan files
@@ -753,10 +759,12 @@ def _perform_scan(
         distance_threshold=cfg.folder_tags.distance_threshold,
     )
     
+    exif_reader = ExifReader(skip_errors=cfg.scan.skip_exif_errors)
     date_engine = DateInferenceEngine(
         priority=_build_date_priority(cfg),
         year_cutoff=cfg.filename_date.year_cutoff,
         filename_date_enabled=cfg.filename_date.enabled,
+        exif_reader=exif_reader,
     )
 
     # Create scanner with config values
