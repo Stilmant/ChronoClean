@@ -135,6 +135,7 @@ renaming:
 # ============================================================================
 duplicates:
   enabled: true               # Enable duplicate detection on collision
+  policy: "safe"              # Planned: safe, skip, overwrite
   hashing_algorithm: "sha256" # sha256, md5
   on_collision: "check_hash"  # check_hash, rename, skip, fail
 
@@ -144,6 +145,7 @@ duplicates:
 # ============================================================================
 filename_date:
   enabled: true               # Enable filename date extraction
+  # patterns: []              # Planned: custom patterns (uses built-in)
   year_cutoff: 30             # 2-digit year: 00-30 = 2000s, 31-99 = 1900s
   priority: "after_exif"      # before_exif, after_exif, after_filesystem
 
@@ -154,6 +156,18 @@ filename_date:
 date_mismatch:
   enabled: true               # Enable mismatch detection
   threshold_days: 1           # Days difference to flag as mismatch
+  # warn_on_scan: true        # Planned: show warnings during scan
+  # include_in_export: true   # Planned: conditionally include in export
+
+# ============================================================================
+# EXPORT SETTINGS (v0.2)
+# ============================================================================
+export:
+  default_format: "json"      # json, csv
+  include_statistics: true    # Include summary stats in export
+  # include_folder_tags: true # Planned: include folder tag fields
+  pretty_print: true          # Format JSON with indentation
+  output_path: ".chronoclean/export"
 
 # ============================================================================
 # LOGGING

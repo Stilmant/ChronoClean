@@ -208,17 +208,20 @@ renaming:
 ```yaml
 duplicates:
   enabled: true               # Enable duplicate detection
+  policy: "safe"              # Planned: safe, skip, overwrite
   hashing_algorithm: "sha256" # sha256, md5
   on_collision: "check_hash"  # check_hash, rename, skip, fail
 ```
 
-**Collision strategies:**
+**Collision strategies (`on_collision`):**
 | Strategy | Behavior |
 |----------|----------|
 | `check_hash` | Compare file hashes; skip if identical, rename if different |
 | `rename` | Always rename colliding files (add counter suffix) |
 | `skip` | Skip all files that would collide |
 | `fail` | Stop with error on first collision |
+
+> **Note:** `policy` is reserved for future use (planned).
 
 ### `filename_date` — Filename Date Parsing (v0.2)
 
@@ -227,6 +230,7 @@ Extract dates embedded in filenames like `IMG_20240315_143000.jpg`.
 ```yaml
 filename_date:
   enabled: true               # Enable filename date extraction
+  patterns: []                # Planned: custom regex patterns (uses built-in patterns)
   year_cutoff: 30             # 2-digit year: 00-30 = 2000s, 31-99 = 1900s
   priority: "after_exif"      # When to try filename in date inference
 ```
@@ -238,6 +242,9 @@ filename_date:
 | `after_exif` | Try filename after EXIF but before filesystem |
 | `after_filesystem` | Try filename after filesystem date |
 
+> **Note:** `patterns` is reserved for future use. Currently uses built-in regex patterns
+> that match common formats like `YYYYMMDD_HHMMSS`, `YYYYMMDD`, `IMG_YYMMDD`, etc.
+
 ### `date_mismatch` — Date Mismatch Detection (v0.2)
 
 Detect when a file's filename date doesn't match its EXIF/filesystem date.
@@ -246,10 +253,14 @@ Detect when a file's filename date doesn't match its EXIF/filesystem date.
 date_mismatch:
   enabled: true               # Enable mismatch detection
   threshold_days: 1           # Days difference to flag as mismatch
+  warn_on_scan: true          # Planned: show warnings during scan
+  include_in_export: true     # Planned: conditionally include in export
 ```
 
 Mismatches are flagged in scan results and exports, helping identify
 renamed files or files with incorrect EXIF data.
+
+> **Note:** `warn_on_scan` and `include_in_export` are reserved for future use.
 
 ### `export` — Export Settings (v0.2)
 
@@ -257,8 +268,13 @@ renamed files or files with incorrect EXIF data.
 export:
   default_format: "json"      # json, csv
   include_statistics: true    # Include summary stats in export
+  include_folder_tags: true   # Planned: include folder tag fields
   pretty_print: true          # Format JSON with indentation
+  output_path: ".chronoclean/export"  # Default output directory
 ```
+
+> **Note:** `include_folder_tags` is reserved for future use. Currently folder tags
+> are detected but not included in export output.
 
 ### `logging` — Logging Settings
 
