@@ -82,7 +82,7 @@ ChronoClean does not attempt complex AI deduplication or modification of image c
 ### Dry Run System
 Two levels:
 - **Dry-run console output**: shows exactly what would be done, without making changes
-- **Export report**: JSON or CSV including:
+- **Export report** (current `export` command): JSON or CSV including:
   - source path and filename
   - detected date and date source (EXIF, filesystem, filename)
   - date mismatch detection (when filename date ≠ EXIF/file date)
@@ -165,11 +165,23 @@ ChronoClean does not attempt full-library deduplication unless explicitly reques
 ---
 
 ## Workflow
-ChronoClean follows a predictable, reversible flow:
-1. **Scan** — analyze directories, read EXIF, classify folder names.
-2. **Export** — produce JSON/CSV “plan” you can inspect or edit.
-3. **Dry Run** — simulate actions using the plan; nothing is written.
-4. **Apply** — perform sorting, moves, renames, and conflict resolution.
+ChronoClean supports two workflows (the second is planned for v0.4).
+
+### 1) Quick workflow (today)
+1. **Scan** - analyze directories, read EXIF, classify folder names.
+2. **Dry run apply** - simulate actions (`apply` defaults to dry-run).
+3. **Apply** - perform sorting, moves, renames, and conflict resolution.
+
+### 2) Plan-based workflow (planned v0.4)
+This workflow introduces an explicit, reviewable plan file for large/messy imports.
+1. **Scan/report** - generate analysis output for review (JSON/CSV).
+2. **Plan** - generate an executable plan file (JSON) that includes destinations + final names + decisions.
+3. **Dry run from plan** - simulate the plan without touching disk.
+4. **Apply from plan** - execute exactly what the reviewed plan specifies.
+
+Planned command split for clarity:
+- `report ...` = analysis output (what was detected)
+- `plan ...` = executable plan (what will be done)
 
 ---
 
@@ -237,6 +249,10 @@ python3 -m chronoclean scan /volume1/photos --report  # Detailed per-file report
 # Export scan results (v0.2)
 python3 -m chronoclean export json /volume1/photos -o results.json
 python3 -m chronoclean export csv /volume1/photos -o results.csv
+
+# Planned v0.4: command split
+# - report = analysis outputs (JSON/CSV)
+# - plan = executable plan generation
 
 # Organize files (dry-run by default)
 python3 -m chronoclean apply /volume1/unsorted /volume1/photos
@@ -322,27 +338,28 @@ ChronoClean development follows a phased approach from prototype to production-r
 - ✅ `config show` command to display current configuration
 - Planned: `report` command for detailed analysis output
 
-### v0.3 – Video & Advanced Metadata
-- Video metadata extraction (hachoir or ffmpeg-python)
-- Unified date handling for images and videos
-- Enhanced EXIF/metadata error handling and logging
-- Heuristic date clustering for files without metadata
+### v0.3 - Video & Advanced Metadata
+- Video “taken date” extraction (choose backend: `ffmpeg/ffprobe` vs `hachoir`) and map it into `DateSource`
+- Unify “best date” resolution across image+video metadata + filesystem + filename + folder-name (same priority system)
+- Improve metadata error handling/logging (clear per-file reason + summary counts)
+- Optional (opt-in) heuristics for “no metadata” cases (e.g., clustering), kept deterministic
 
-### v0.4 – User Experience & Safety
-- Interactive CLI prompts for export review and tag selection (Rich-based)
-- Configurable allow/ignore lists for folder tags (persistent state)
-- Progress bars and improved logging with Rich
-- Safety checks: disk space verification, dry-run warnings, backup reminders
-- `config set` command for runtime configuration changes
-- Undo/rollback support with operation journal
+### v0.4 - User Experience & Safety
+- Unambiguous command split:
+  - `report` = scan/analysis outputs (JSON/CSV)
+  - `plan` = executable plan generation (JSON)
+- `apply --from-plan <plan.json>` (deterministic execution of reviewed plans)
+- `dryrun --from-plan <plan.json>` (optional; `apply --dry-run` remains for quick runs)
+- `report` command(s) for scan/plan/apply summaries (mismatches, collisions, duplicates)
+- Interactive review (Rich): confirm risky ops, inspect collisions, accept/reject tags/renames
+- Persistent state for tag decisions/overrides (separate from main YAML), plus optional `config set`
+- Safety gates: disk-space check, live-mode warnings, backup reminders, clearer “what will change”
 
-### v0.5 – NAS & Large-Scale Support
-- Optimizations for large libraries (100k+ files)
-- Caching layer for EXIF data (SQLite-based)
-- Synology DSM integration notes and best practices
-- Task Scheduler compatibility and headless mode
-- Parallel/multiprocessing for faster scans (configurable workers)
-- Memory-efficient streaming for very large libraries
+### v0.5 - NAS & Large-Scale Support
+- Implement performance knobs: parallel scan/inference (configurable workers) and memory-efficient iteration
+- Caching (SQLite) for metadata/hash results with invalidation strategy (mtime/size), to speed re-runs
+- Synology DSM notes + headless/Task Scheduler friendly mode and recommended configs
+- Optimize collision/duplicate handling for large batches (streaming plan generation, bounded caches)
 
 ### v1.0 – Stable Release
 - Full conflict resolution and rollback support

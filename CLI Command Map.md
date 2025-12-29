@@ -5,12 +5,18 @@ Note: As of v0.2, the implemented commands are `scan`, `export`, `apply`, `confi
 `dryrun`, `tags`, `report`, and `hash` are planned for later phases per the roadmap and are documented here
 as forward-looking commands.
 
-ChronoClean follows a 4-phase workflow:
+ChronoClean supports a quick workflow today, plus an optional plan-based workflow (planned v0.4):
 
-1. **scan** — analyze the library
-2. **export** — generate a detailed plan (JSON/CSV) 
-3. **dryrun** — simulate changes
-4. **apply** — perform the real operations
+1) **Quick workflow (today)**
+1. **scan** - analyze the library
+2. **export** - export a scan report (JSON/CSV)
+3. **apply** - perform the real operations (defaults to dry-run)
+
+2) **Plan-based workflow (planned v0.4)**
+1. **report** - analysis outputs (JSON/CSV)
+2. **plan** - generate an executable plan (JSON)
+3. **dryrun** - simulate changes from plan
+4. **apply** - execute from plan
 
 Each phase has subcommands and options to keep everything clean and explicit.
 
@@ -23,14 +29,15 @@ Usage:
 
 Available commands:
 
-- `scan` — Analyze files, read EXIF, infer dates, detect meaningful folders
-- `export` — Generate an export plan for review (JSON/CSV)
-- `dryrun` — Simulate operations without touching disk
-- `apply` — Perform actual file moves and renames
-- `tags` — Manage/inspect folder-tag rules
-- `report` — Show summary reports after scan or apply
-- `config` — Show or edit configuration settings
-- `hash` — Compute hashes for debugging or tests
+- `scan` - Analyze files, read EXIF, infer dates, detect meaningful folders
+- `export` - Export a scan report for review (JSON/CSV) (v0.2)
+- `dryrun` - Simulate operations without touching disk
+- `plan` - Generate an executable plan file (JSON) (planned v0.4)
+- `apply` - Perform actual file moves and renames
+- `tags` - Manage/inspect folder-tag rules
+- `report` - Show summary reports after scan or apply
+- `config` - Show or edit configuration settings
+- `hash` - Compute hashes for debugging or tests
 - `version` — Show tool version
 
 **Command Details**
@@ -60,10 +67,10 @@ Output:
 - In-memory model
 - `.chronoclean/scan.json` (optional persistent state)
 
-2. **export**
+2. **export** (v0.2)
 ---------
 
-Export a full plan that can be reviewed or edited by the user.
+Export scan results for review (report output).
 
 Usage:
 
@@ -80,11 +87,15 @@ Options:
 - `--config PATH` — Specify config file path
 
 Note: Duplicate detection occurs during `apply`, not during export.
-Folder tags are detected during scan/apply, but the export output does not currently include folder tag fields (planned).
+Folder tags are detected during scan/apply.
 
 Output example:
 
-`.chronoclean/plan.json`, `.chronoclean/plan.csv`
+`results.json`, `results.csv`
+
+Planned v0.4: introduce an unambiguous split:
+- `report ...` = analysis outputs (replaces `export` for scan reporting)
+- `plan ...` = executable plan generation (what will be done)
 
 3. **dryrun** (Planned)
 ---------
@@ -130,9 +141,27 @@ Implemented Options:
 
 Planned Options:
 
-- `--from-plan PATH` — Use a specific plan file
-- `--preserve-names` — Do not rename files, only move
-- `--conflict-strategy` — Strategy for handling conflicts (use config for now)
+- `--from-plan PATH` - Use a specific plan file
+- `--preserve-names` - Do not rename files, only move
+- `--conflict-strategy` - Strategy for handling conflicts (use config for now)
+
+5. **plan** (Planned v0.4)
+--------
+
+Generate an executable plan file (JSON) for review and deterministic execution.
+
+Usage:
+
+`chronoclean plan build <source> <destination> -o plan.json [options]`
+
+Planned options:
+- `--rename / --no-rename`
+- `--tag-names / --no-tag-names`
+- `--structure`
+- `--recursive / --no-recursive`
+- `--videos / --no-videos`
+- `--limit`
+- `--config`
 
 Safeguards:
 
