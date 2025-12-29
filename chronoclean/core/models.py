@@ -11,6 +11,7 @@ class DateSource(Enum):
     """Origin of the detected date."""
 
     EXIF = "exif"
+    VIDEO_METADATA = "video_metadata"  # v0.3: Date from video container metadata
     FILESYSTEM_CREATED = "filesystem_created"
     FILESYSTEM_MODIFIED = "filesystem_modified"
     FOLDER_NAME = "folder_name"
@@ -64,6 +65,10 @@ class FileRecord:
     duplicate_of: Optional[Path] = None
     is_duplicate: bool = False
 
+    # v0.3: Video metadata and error categorization
+    video_metadata_date: Optional[datetime] = None  # Raw video creation date
+    error_category: Optional[str] = None  # Categorized error type
+
     @property
     def destination_path(self) -> Optional[Path]:
         """Full destination path if both folder and filename are set."""
@@ -96,6 +101,9 @@ class ScanResult:
     folder_tags_detected: list[str] = field(default_factory=list)
     errors: list[tuple[Path, str]] = field(default_factory=list)
 
+    # v0.3: Error categorization
+    errors_by_category: dict[str, int] = field(default_factory=dict)
+
     scan_duration_seconds: float = 0.0
     scan_timestamp: datetime = field(default_factory=datetime.now)
 
@@ -111,14 +119,29 @@ class ScanResult:
         self.files.append(record)
         self.processed_files += 1
 
-    def add_error(self, path: Path, error: str) -> None:
-        """Record an error for a file."""
+    def add_error(self, path: Path, error: str, category: Optional[str] = None) -> None:
+        """Record an error for a file.
+        
+        Args:
+            path: Path to the file that caused the error
+            error: Error message
+            category: Optional error category for aggregation
+        """
         self.errors.append((path, error))
         self.error_files += 1
+        if category:
+            self.errors_by_category[category] = self.errors_by_category.get(category, 0) + 1
 
     def add_skipped(self) -> None:
         """Record a skipped file."""
         self.skipped_files += 1
+
+    def increment_error_category(self, category: str) -> None:
+        """Increment error count for a category without adding to errors list.
+        
+        Use for warnings/issues that don't prevent processing.
+        """
+        self.errors_by_category[category] = self.errors_by_category.get(category, 0) + 1
 
 
 @dataclass

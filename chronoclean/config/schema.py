@@ -52,12 +52,24 @@ class ScanConfig:
 
 
 @dataclass
+class VideoMetadataConfig:
+    """Video metadata extraction configuration (v0.3)."""
+
+    enabled: bool = True
+    provider: str = "ffprobe"  # ffprobe, hachoir
+    ffprobe_path: str = "ffprobe"  # Path to ffprobe binary
+    fallback_to_hachoir: bool = True  # Use hachoir if ffprobe unavailable
+    skip_errors: bool = True  # Continue on metadata read failures
+
+
+@dataclass
 class SortingConfig:
     """Sorting configuration settings."""
 
     folder_structure: str = "YYYY/MM"
+    # v0.3: Updated default to include video_metadata and filename
     fallback_date_priority: list[str] = field(
-        default_factory=lambda: ["exif", "filesystem", "folder_name"]
+        default_factory=lambda: ["exif", "video_metadata", "filename", "filesystem", "folder_name"]
     )
     include_day: bool = False
 
@@ -66,8 +78,9 @@ class SortingConfig:
 class HeuristicConfig:
     """Heuristic date inference settings."""
 
-    enabled: bool = True
+    enabled: bool = False  # v0.3: Changed default to False for safety
     max_days_from_cluster: int = 2
+    min_cluster_size: int = 3  # v0.3: Minimum files needed to form a cluster
 
 
 @dataclass
@@ -218,6 +231,8 @@ class ChronoCleanConfig:
     filename_date: FilenameDateConfig = field(default_factory=FilenameDateConfig)
     date_mismatch: DateMismatchConfig = field(default_factory=DateMismatchConfig)
     export: ExportConfig = field(default_factory=ExportConfig)
+    # v0.3 additions
+    video_metadata: VideoMetadataConfig = field(default_factory=VideoMetadataConfig)
     # Display and system
     dry_run: DryRunConfig = field(default_factory=DryRunConfig)
     logging: LoggingConfig = field(default_factory=LoggingConfig)

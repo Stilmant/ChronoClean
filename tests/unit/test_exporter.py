@@ -238,11 +238,13 @@ class TestToCsv:
         reader = csv.reader(io.StringIO(csv_str))
         headers = next(reader)
         
+        # v0.3: Added video_metadata_date and error_category
         expected_headers = [
             "path", "filename", "size_bytes", "extension",
             "date_taken", "date_source", "year", "month",
             "target_path", "filename_date", "date_mismatch",
-            "date_mismatch_days", "file_hash", "is_duplicate", "duplicate_of"
+            "date_mismatch_days", "video_metadata_date", "error_category",
+            "file_hash", "is_duplicate", "duplicate_of"
         ]
         assert headers == expected_headers
 

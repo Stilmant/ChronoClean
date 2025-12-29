@@ -110,6 +110,50 @@ class Renamer:
 
         return f"{filename}{ext}"
 
+    def generate_filename_tag_only(
+        self,
+        original_path: Path,
+        tag: str,
+        counter: Optional[int] = None,
+    ) -> str:
+        """
+        Generate filename with tag appended, preserving original name.
+        
+        v0.3 feature: Allows tagging without full rename.
+        
+        Args:
+            original_path: Original file path
+            tag: Folder tag to append
+            counter: Optional counter for duplicates
+            
+        Returns:
+            New filename: {original_stem}_{tag}.{ext}
+            
+        Example:
+            original="IMG_1234.JPG", tag="Paris"
+            → "IMG_1234_Paris.jpg"
+        """
+        stem = original_path.stem
+        formatted_tag = self._format_tag(tag)
+        
+        # Build new name
+        filename = f"{stem}_{formatted_tag}"
+        
+        # Handle counter
+        if counter is not None:
+            filename = f"{filename}_{counter:03d}"
+        
+        # Clean up any double underscores
+        filename = re.sub(r"_+", "_", filename)
+        filename = filename.strip("_")
+        
+        # Add extension
+        ext = original_path.suffix
+        if self.lowercase_ext:
+            ext = ext.lower()
+        
+        return f"{filename}{ext}"
+
     def _format_tag(self, tag: str) -> str:
         """
         Format tag for filename inclusion.

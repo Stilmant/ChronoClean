@@ -133,6 +133,24 @@ class Scanner:
                 if record.folder_tag:
                     folder_tags_seen.add(record.folder_tag)
 
+                # v0.3: Track error categories from records
+                if record.error_category:
+                    result.increment_error_category(record.error_category)
+                
+                # v0.3: Track files with no date found
+                if record.date_source == DateSource.UNKNOWN:
+                    result.increment_error_category("no_date_found")
+                
+                # v0.2: Track date mismatches
+                if record.date_mismatch:
+                    result.increment_error_category("date_mismatch")
+
+            except PermissionError as e:
+                logger.error(f"Permission denied for {file_path}: {e}")
+                result.add_error(file_path, str(e), category="file_access_error")
+            except OSError as e:
+                logger.error(f"OS error processing {file_path}: {e}")
+                result.add_error(file_path, str(e), category="file_access_error")
             except Exception as e:
                 logger.error(f"Error processing {file_path}: {e}")
                 result.add_error(file_path, str(e))
@@ -221,11 +239,17 @@ class Scanner:
             source_folder_name=file_path.parent.name,
         )
 
-        # Get date
-        detected_date, date_source = self.date_engine.infer_date(file_path)
+        # Get date (pass file_type to route to correct metadata reader)
+        detected_date, date_source = self.date_engine.infer_date(file_path, file_type)
         record.detected_date = detected_date
         record.date_source = date_source
         record.has_exif = date_source == DateSource.EXIF
+
+        # v0.3: Extract video metadata date for video files
+        if file_type == FileType.VIDEO:
+            video_date = self.date_engine.get_video_metadata_date(file_path)
+            if video_date:
+                record.video_metadata_date = video_date
 
         # v0.2: Extract filename date (always extract for comparison)
         filename_date = self.date_engine.get_filename_date(file_path)

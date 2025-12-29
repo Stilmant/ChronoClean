@@ -18,6 +18,10 @@ sorting:
 #   enabled: true
 #   pattern: "{date}_{time}"
 
+# video_metadata:
+#   enabled: true              # Extract dates from video files (v0.3)
+#   providers: ["ffprobe", "hachoir"]
+
 # filename_date:
 #   enabled: true              # Extract dates from filenames (v0.2)
 #   priority: "after_exif"     # before_exif, after_exif, after_filesystem
@@ -90,7 +94,9 @@ scan:
 sorting:
   folder_structure: "YYYY/MM" # Options: YYYY, YYYY/MM, YYYY/MM/DD
   fallback_date_priority:     # Order to try when inferring dates
-    - "exif"                  # EXIF metadata (most reliable)
+    - "exif"                  # EXIF metadata (most reliable for images)
+    - "video_metadata"        # Video container metadata (v0.3)
+    - "filename"              # Date parsed from filename
     - "filesystem"            # File modification date
     - "folder_name"           # Date parsed from folder name
 
@@ -138,6 +144,16 @@ duplicates:
   policy: "safe"              # Planned: safe, skip, overwrite
   hashing_algorithm: "sha256" # sha256, md5
   on_collision: "check_hash"  # check_hash, rename, skip, fail
+
+# ============================================================================
+# VIDEO METADATA SETTINGS (v0.3)
+# Extract creation dates from video container metadata
+# ============================================================================
+video_metadata:
+  enabled: true               # Enable video metadata extraction
+  providers:                  # Extraction methods in priority order
+    - "ffprobe"               # Fast & accurate (requires ffprobe)
+    - "hachoir"               # Pure Python fallback (always available)
 
 # ============================================================================
 # FILENAME DATE PARSING (v0.2)

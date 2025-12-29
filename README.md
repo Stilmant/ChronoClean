@@ -1,6 +1,6 @@
 # ChronoClean
 
-![Status](https://img.shields.io/badge/status-v0.2_prototype-blue)
+![Status](https://img.shields.io/badge/status-v0.3_prototype-blue)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Platform](https://img.shields.io/badge/platform-SynologyNAS-lightgrey)
@@ -69,6 +69,7 @@ ChronoClean does not attempt complex AI deduplication or modification of image c
 
 ### Sorting & Organization
 - EXIF-based sorting into a chronological folder hierarchy (year/month) (day optional)
+- Video metadata extraction for MP4, MOV, MKV, etc. (v0.3)
 - Fallback to creation/modification timestamp when EXIF is missing
 - Optionally infer date from directory name if metadata is absent
 - Consistent, predictable tree structure suitable for NAS archives and long-term storage
@@ -77,6 +78,7 @@ ChronoClean does not attempt complex AI deduplication or modification of image c
 - Disabled by default; original filenames are preserved unless renaming is enabled
 - Configurable renaming rules for standard, readable patterns
 - Configurable folder-tag insertion for context-rich filenames
+- Tag-only mode: add tags without full renaming (v0.3)
 - Prevents double-tagging and name inflation
 
 ### Dry Run System
@@ -84,8 +86,9 @@ Two levels:
 - **Dry-run console output**: shows exactly what would be done, without making changes
 - **Export report** (current `export` command): JSON or CSV including:
   - source path and filename
-  - detected date and date source (EXIF, filesystem, filename)
+  - detected date and date source (EXIF, filesystem, filename, video_metadata)
   - date mismatch detection (when filename date ≠ EXIF/file date)
+  - error categories for troubleshooting (v0.3)
 
 This export can be reviewed before applying changes.
 
@@ -215,9 +218,10 @@ The following libraries are recommended but not mandatory:
 - **piexif** or **exifread** (EXIF handling):
   - **piexif** is ideal for lossless EXIF extraction, insertion, and modification, especially when you need to preserve all metadata exactly or write EXIF back to files. It is more specialized for EXIF than Pillow.
   - **exifread** is focused on reading EXIF data only (no writing), and is robust for extracting metadata from a wide range of JPEGs and TIFFs.
-- **hachoir** or **ffmpeg** (video metadata):
-  - **hachoir** is a Python library for parsing and extracting metadata from many binary formats, including some video files.
-  - **ffmpeg** is a command-line tool (can be called from Python) that extracts metadata from virtually any video or audio file, and is more comprehensive for multimedia.
+- **hachoir** or **ffprobe** (video metadata - v0.3):
+  - **ffprobe** (part of FFmpeg) is the preferred provider for extracting creation dates from video files. It's fast and handles most formats including MP4, MOV, MKV, AVI.
+  - **hachoir** is a pure Python fallback that requires no external installation but supports fewer formats and is slower.
+  - ChronoClean automatically uses ffprobe if available, falling back to hachoir otherwise.
 - **hashlib** (hashing):
   - Provides cryptographic hashes (SHA256, MD5) for duplicate detection.
   - Included in Python's standard library; reliable and portable.
@@ -339,11 +343,11 @@ ChronoClean development follows a phased approach from prototype to production-r
 - Planned: `report` command for detailed analysis output
 
 ### v0.3 - Video & Advanced Metadata
-- Video "taken date" extraction (choose backend: `ffmpeg/ffprobe` vs `hachoir`) and map it into `DateSource`
-- Unify "best date" resolution across image+video metadata + filesystem + filename + folder-name (same priority system)
-- Improve metadata error handling/logging (clear per-file reason + summary counts)
-- Optional (opt-in) heuristics for "no metadata" cases (e.g., clustering), kept deterministic
-- Decouple tagging from date renaming; allow tag-only filenames (append tags even when `--rename` is off)
+- ✅ Video "taken date" extraction (choose backend: `ffprobe` vs `hachoir`) mapped into `DateSource.VIDEO_METADATA`
+- ✅ Unified "best date" resolution across image+video metadata + filesystem + filename + folder-name (same priority system)
+- ✅ Improved metadata error handling/logging (clear per-file reason + summary counts by category)
+- ✅ Decouple tagging from date renaming; allow tag-only filenames (append tags even when `--rename` is off)
+- Deferred to future: Optional heuristics for "no metadata" cases (config placeholder added)
 
 ### v0.4 - User Experience & Safety
 - Unambiguous command split:

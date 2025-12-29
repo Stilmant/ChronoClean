@@ -271,7 +271,8 @@ class TestDateInferenceWithConfig:
 
         engine = DateInferenceEngine()
 
-        assert engine.priority == ["exif", "filesystem", "folder_name"]
+        # v0.3: Default priority includes video_metadata and filename
+        assert engine.priority == ["exif", "video_metadata", "filename", "filesystem", "folder_name"]
 
 
 class TestRenamerWithConfig:

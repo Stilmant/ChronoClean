@@ -154,6 +154,9 @@ class Exporter:
             "filename_date": record.filename_date.isoformat() if record.filename_date else None,
             "date_mismatch": record.date_mismatch,
             "date_mismatch_days": record.date_mismatch_days,
+            # v0.3: Video metadata and error category
+            "video_metadata_date": record.video_metadata_date.isoformat() if record.video_metadata_date else None,
+            "error_category": record.error_category,
             "file_hash": record.file_hash,
             "is_duplicate": record.is_duplicate,
             "duplicate_of": str(record.duplicate_of) if record.duplicate_of else None,
@@ -188,6 +191,9 @@ class Exporter:
             record.filename_date.isoformat() if record.filename_date else "",
             record.date_mismatch or False,
             record.date_mismatch_days or "",
+            # v0.3: Video metadata and error category
+            record.video_metadata_date.isoformat() if record.video_metadata_date else "",
+            record.error_category or "",
             record.file_hash or "",
             record.is_duplicate or False,
             str(record.duplicate_of) if record.duplicate_of else "",
@@ -212,6 +218,9 @@ class Exporter:
             "filename_date",
             "date_mismatch",
             "date_mismatch_days",
+            # v0.3: Video metadata and error category
+            "video_metadata_date",
+            "error_category",
             "file_hash",
             "is_duplicate",
             "duplicate_of",
@@ -257,6 +266,13 @@ class Exporter:
         # Duplicate statistics
         duplicate_files = [r for r in files if r.is_duplicate]
 
+        # v0.3: Error category counts (from file records)
+        error_categories: dict[str, int] = {}
+        for record in files:
+            if record.error_category:
+                cat = record.error_category
+                error_categories[cat] = error_categories.get(cat, 0) + 1
+
         return {
             "total_files": len(files),
             "total_size_bytes": total_size,
@@ -268,6 +284,8 @@ class Exporter:
             "files_by_extension": dict(sorted(ext_counts.items())),
             "date_mismatch_count": len(mismatch_files),
             "duplicate_count": len(duplicate_files),
+            # v0.3: Error categories
+            "errors_by_category": error_categories if error_categories else None,
         }
 
     def _human_readable_size(self, size_bytes: int) -> str:

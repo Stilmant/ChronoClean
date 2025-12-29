@@ -10,21 +10,20 @@ class TestBuildDatePriority:
     """Tests for _build_date_priority function."""
 
     def test_default_priority_with_filename_enabled_by_default(self):
-        """Default config has filename_date.enabled=True, so filename is added."""
+        """Default config has filename_date.enabled=True, so filename is included."""
         cfg = ChronoCleanConfig()
         # Default: filename_date.enabled = True
         
         result = _build_date_priority(cfg)
         
-        # filename should be included (default priority is after_exif)
+        # v0.3: Default priority is ["exif", "video_metadata", "filename", "filesystem", "folder_name"]
         assert "filename" in result
-        # Default priority is after_exif
-        exif_idx = result.index("exif")
-        filename_idx = result.index("filename")
-        assert filename_idx == exif_idx + 1
+        assert "video_metadata" in result
+        # filename should be after video_metadata
+        assert result.index("filename") > result.index("video_metadata")
 
     def test_filename_enabled_adds_to_priority(self):
-        """When filename_date.enabled, filename is added to priority."""
+        """When filename_date.enabled, filename is in the priority list."""
         cfg = ChronoCleanConfig()
         cfg.filename_date.enabled = True
         cfg.filename_date.priority = "after_exif"
@@ -32,14 +31,12 @@ class TestBuildDatePriority:
         result = _build_date_priority(cfg)
         
         assert "filename" in result
-        # Should be after exif
-        assert result.index("filename") == result.index("exif") + 1
 
     def test_filename_disabled_strips_from_priority(self):
         """When filename_date.enabled=False, filename is stripped even if in fallback_date_priority."""
         cfg = ChronoCleanConfig()
         cfg.filename_date.enabled = False
-        # User mistakenly added filename to fallback_date_priority
+        # Use a priority list with filename
         cfg.sorting.fallback_date_priority = ["exif", "filename", "filesystem", "folder_name"]
         
         result = _build_date_priority(cfg)
@@ -63,6 +60,8 @@ class TestBuildDatePriority:
         cfg = ChronoCleanConfig()
         cfg.filename_date.enabled = True
         cfg.filename_date.priority = "before_exif"
+        # Use priority list without filename to test insertion
+        cfg.sorting.fallback_date_priority = ["exif", "filesystem", "folder_name"]
         
         result = _build_date_priority(cfg)
         
@@ -74,6 +73,8 @@ class TestBuildDatePriority:
         cfg = ChronoCleanConfig()
         cfg.filename_date.enabled = True
         cfg.filename_date.priority = "after_exif"
+        # Use priority list without filename to test insertion
+        cfg.sorting.fallback_date_priority = ["exif", "filesystem", "folder_name"]
         
         result = _build_date_priority(cfg)
         
@@ -86,6 +87,8 @@ class TestBuildDatePriority:
         cfg = ChronoCleanConfig()
         cfg.filename_date.enabled = True
         cfg.filename_date.priority = "after_filesystem"
+        # Use priority list without filename to test insertion
+        cfg.sorting.fallback_date_priority = ["exif", "filesystem", "folder_name"]
         
         result = _build_date_priority(cfg)
         
@@ -148,11 +151,13 @@ class TestBuildDatePriority:
         """Default priority setting is 'after_exif'."""
         cfg = ChronoCleanConfig()
         cfg.filename_date.enabled = True
-        # Don't set priority, use default
+        # Use priority list without filename to test insertion
+        cfg.sorting.fallback_date_priority = ["exif", "filesystem", "folder_name"]
         
         result = _build_date_priority(cfg)
         
         # Default is after_exif
         assert "filename" in result
-        if "exif" in result:
-            assert result.index("filename") == result.index("exif") + 1
+        exif_idx = result.index("exif")
+        filename_idx = result.index("filename")
+        assert filename_idx == exif_idx + 1

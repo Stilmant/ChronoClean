@@ -141,7 +141,9 @@ scan:
 sorting:
   folder_structure: "YYYY/MM"   # Options: YYYY, YYYY/MM, YYYY/MM/DD
   fallback_date_priority:       # Order to try when inferring dates
-    - "exif"                    # EXIF metadata (most reliable)
+    - "exif"                    # EXIF metadata (most reliable for images)
+    - "video_metadata"          # Video container metadata (v0.3)
+    - "filename"                # Date from filename pattern
     - "filesystem"              # File modification date
     - "folder_name"             # Date from folder name
 ```
@@ -262,6 +264,31 @@ renamed files or files with incorrect EXIF data.
 
 > **Note:** `warn_on_scan` and `include_in_export` are reserved for future use.
 
+### `video_metadata` — Video Metadata Settings (v0.3)
+
+Extract creation dates from video container metadata (MP4, MOV, MKV, etc.).
+
+```yaml
+video_metadata:
+  enabled: true               # Enable video metadata extraction
+  providers:                  # Extraction methods in priority order
+    - "ffprobe"               # Fast & accurate (requires ffprobe installed)
+    - "hachoir"               # Pure Python fallback (always available)
+```
+
+**Provider comparison:**
+| Provider | Pros | Cons |
+|----------|------|------|
+| `ffprobe` | Fast, handles most formats | Requires FFmpeg installation |
+| `hachoir` | Pure Python, no dependencies | Slower, fewer formats |
+
+**Installing ffprobe:**
+- **Windows:** Download from [ffmpeg.org](https://ffmpeg.org/download.html) or use `winget install ffmpeg`
+- **macOS:** `brew install ffmpeg`
+- **Linux:** `apt install ffmpeg` or `dnf install ffmpeg`
+
+ChronoClean automatically falls back to `hachoir` if `ffprobe` is not available.
+
 ### `export` — Export Settings (v0.2)
 
 ```yaml
@@ -373,7 +400,7 @@ ChronoClean validates your config on load. Common errors:
 | Error | Cause |
 |-------|-------|
 | `Invalid folder_structure` | Use `YYYY`, `YYYY/MM`, or `YYYY/MM/DD` |
-| `Invalid fallback source` | Use `exif`, `filesystem`, `folder_name` |
+| `Invalid fallback source` | Use `exif`, `video_metadata`, `filename`, `filesystem`, `folder_name` |
 | `Invalid log level` | Use `debug`, `info`, `warning`, `error` |
 | `threshold out of range` | Must be 0.0 to 1.0 |
 

@@ -17,8 +17,10 @@ class TestDateInferenceEngine:
     def test_init_defaults(self):
         engine = DateInferenceEngine()
 
-        assert engine.priority == ["exif", "filesystem", "folder_name"]
+        # v0.3: Default priority includes video_metadata and filename
+        assert engine.priority == ["exif", "video_metadata", "filename", "filesystem", "folder_name"]
         assert engine.exif_reader is not None
+        assert engine.video_reader is not None
 
     def test_init_custom_priority(self):
         engine = DateInferenceEngine(priority=["filesystem", "exif"])

@@ -311,6 +311,13 @@ def scan(
         if len(result.errors) > 5:
             console.print(f"  ... and {len(result.errors) - 5} more")
 
+    # v0.3: Error categories summary
+    if result.errors_by_category:
+        console.print()
+        console.print("[yellow]Errors by category:[/yellow]")
+        for category, count in sorted(result.errors_by_category.items()):
+            console.print(f"  • {category}: {count}")
+
 
 @app.command()
 def apply(
@@ -329,7 +336,7 @@ def apply(
     ),
     tag_names: Optional[bool] = typer.Option(
         None, "--tag-names/--no-tag-names",
-        help="Add folder tags",
+        help="Add folder tags to filenames (works with or without --rename)",
         show_default=_bool_show_default(_default_cfg.folder_tags.enabled, "tag-names", "no-tag-names"),
     ),
     recursive: Optional[bool] = typer.Option(
@@ -481,13 +488,24 @@ def apply(
         # Determine filename
         new_filename = None
         if use_rename and renamer and conflict_resolver:
+            # Full rename mode: use date pattern with optional tag
             tag = record.folder_tag if use_tag_names and record.folder_tag_usable else None
             new_filename = conflict_resolver.resolve(
                 record.source_path,
                 record.detected_date,
                 tag=tag,
             )
+        elif use_tag_names and record.folder_tag_usable and record.folder_tag:
+            # v0.3: Tag-only mode - preserve original filename, append tag
+            # Need a renamer instance for tag formatting
+            if not renamer:
+                renamer = Renamer(lowercase_ext=cfg.renaming.lowercase_extensions)
+            new_filename = renamer.generate_filename_tag_only(
+                record.source_path,
+                record.folder_tag,
+            )
         else:
+            # No rename, no tag - keep original filename
             new_filename = record.source_path.name
 
         # Add to plan

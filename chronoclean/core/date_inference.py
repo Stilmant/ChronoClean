@@ -8,7 +8,8 @@ from pathlib import Path
 from typing import Optional
 
 from chronoclean.core.exif_reader import ExifReader
-from chronoclean.core.models import DateSource
+from chronoclean.core.models import DateSource, FileType
+from chronoclean.core.video_metadata import VideoMetadataReader
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +71,7 @@ class DateInferenceEngine:
         self,
         priority: Optional[list[str]] = None,
         exif_reader: Optional[ExifReader] = None,
+        video_reader: Optional[VideoMetadataReader] = None,
         year_cutoff: int = 30,
         filename_date_enabled: bool = True,
     ):
@@ -78,35 +80,50 @@ class DateInferenceEngine:
 
         Args:
             priority: Ordered list of sources to try.
-                      Default: ["exif", "filesystem", "folder_name"]
+                      Default: ["exif", "video_metadata", "filename", "filesystem", "folder_name"]
             exif_reader: ExifReader instance (optional, created if not provided)
+            video_reader: VideoMetadataReader instance (optional, created if not provided)
             year_cutoff: For 2-digit years: 00-cutoff = 2000s, cutoff-99 = 1900s
             filename_date_enabled: Whether to extract dates from filenames
         """
-        self.priority = priority or ["exif", "filesystem", "folder_name"]
+        self.priority = priority or ["exif", "video_metadata", "filename", "filesystem", "folder_name"]
         self.exif_reader = exif_reader or ExifReader()
+        self.video_reader = video_reader or VideoMetadataReader()
         self.year_cutoff = year_cutoff
         self.filename_date_enabled = filename_date_enabled
 
         # Map source names to methods
         self._source_methods = {
             "exif": self._get_exif_date,
+            "video_metadata": self._get_video_metadata_date,
             "filesystem": self._get_filesystem_date,
             "folder_name": self._get_folder_date,
             "filename": self._get_filename_date,
         }
 
-    def infer_date(self, file_path: Path) -> tuple[Optional[datetime], DateSource]:
+    def infer_date(
+        self,
+        file_path: Path,
+        file_type: Optional[FileType] = None,
+    ) -> tuple[Optional[datetime], DateSource]:
         """
         Infer the date for a file using configured priority.
 
         Args:
             file_path: Path to the file
+            file_type: Optional file type hint (IMAGE, VIDEO, RAW).
+                       If provided, skips inapplicable sources.
 
         Returns:
             Tuple of (datetime or None, DateSource indicating origin)
         """
         for source_name in self.priority:
+            # Skip EXIF for videos and video_metadata for images
+            if file_type == FileType.VIDEO and source_name == "exif":
+                continue
+            if file_type in (FileType.IMAGE, FileType.RAW) and source_name == "video_metadata":
+                continue
+            
             method = self._source_methods.get(source_name)
             if not method:
                 logger.warning(f"Unknown date source: {source_name}")
@@ -142,11 +159,35 @@ class DateInferenceEngine:
             return result[0]
         return None
 
+    def get_video_metadata_date(self, file_path: Path) -> Optional[datetime]:
+        """
+        Extract date from video metadata only.
+
+        Used for populating video_metadata_date field in FileRecord.
+
+        Args:
+            file_path: Path to the video file
+
+        Returns:
+            datetime or None
+        """
+        result = self._get_video_metadata_date(file_path)
+        if result:
+            return result[0]
+        return None
+
     def _get_exif_date(self, file_path: Path) -> Optional[tuple[datetime, DateSource]]:
         """Extract date from EXIF metadata."""
         date = self.exif_reader.get_date(file_path)
         if date:
             return date, DateSource.EXIF
+        return None
+
+    def _get_video_metadata_date(self, file_path: Path) -> Optional[tuple[datetime, DateSource]]:
+        """Extract date from video metadata (creation_time, etc.)."""
+        date = self.video_reader.get_creation_date(file_path)
+        if date:
+            return date, DateSource.VIDEO_METADATA
         return None
 
     def _get_filesystem_date(self, file_path: Path) -> Optional[tuple[datetime, DateSource]]:

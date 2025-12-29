@@ -23,6 +23,7 @@ from chronoclean.config.schema import (
     ScanConfig,
     SortingConfig,
     SynologyConfig,
+    VideoMetadataConfig,
 )
 
 logger = logging.getLogger(__name__)
@@ -110,6 +111,8 @@ class ConfigLoader:
             filename_date=cls._build_filename_date(data.get("filename_date", {})),
             date_mismatch=cls._build_date_mismatch(data.get("date_mismatch", {})),
             export=cls._build_export(data.get("export", {})),
+            # v0.3 additions
+            video_metadata=cls._build_video_metadata(data.get("video_metadata", {})),
             # Display and system
             dry_run=cls._build_dry_run(data.get("dry_run", {})),
             logging=cls._build_logging(data.get("logging", {})),
@@ -183,6 +186,9 @@ class ConfigLoader:
             config.enabled = bool(data["enabled"])
         if "max_days_from_cluster" in data:
             config.max_days_from_cluster = int(data["max_days_from_cluster"])
+        # v0.3: min_cluster_size
+        if "min_cluster_size" in data:
+            config.min_cluster_size = int(data["min_cluster_size"])
         return config
 
     @classmethod
@@ -292,6 +298,22 @@ class ConfigLoader:
         return config
 
     @classmethod
+    def _build_video_metadata(cls, data: dict[str, Any]) -> VideoMetadataConfig:
+        """Build VideoMetadataConfig from dictionary (v0.3)."""
+        config = VideoMetadataConfig()
+        if "enabled" in data:
+            config.enabled = bool(data["enabled"])
+        if "provider" in data:
+            config.provider = data["provider"]
+        if "ffprobe_path" in data:
+            config.ffprobe_path = data["ffprobe_path"]
+        if "fallback_to_hachoir" in data:
+            config.fallback_to_hachoir = bool(data["fallback_to_hachoir"])
+        if "skip_errors" in data:
+            config.skip_errors = bool(data["skip_errors"])
+        return config
+
+    @classmethod
     def _build_dry_run(cls, data: dict[str, Any]) -> DryRunConfig:
         """Build DryRunConfig from dictionary."""
         config = DryRunConfig()
@@ -371,7 +393,7 @@ class ConfigLoader:
             )
 
         # Validate fallback priority
-        valid_sources = ["exif", "filesystem", "folder_name", "filename", "heuristic"]
+        valid_sources = ["exif", "video_metadata", "filesystem", "folder_name", "filename", "heuristic"]
         for source in config.sorting.fallback_date_priority:
             if source not in valid_sources:
                 errors.append(f"Invalid fallback source: {source}")
