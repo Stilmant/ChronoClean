@@ -1341,13 +1341,18 @@ def verify(
         
         start_time = time.time()
         total_files = len(expected_mappings)
+        verify_action = (
+            "Hashing (sha256) and comparing..."
+            if use_algorithm == "sha256"
+            else "Quick check (size-only)..."
+        )
         
         with Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
             console=console,
         ) as progress:
-            task = progress.add_task("Verifying...", total=total_files)
+            task = progress.add_task(verify_action, total=total_files)
             
             for i, (source_path, expected_dest) in enumerate(expected_mappings):
                 # Verify using content search if enabled
@@ -1358,7 +1363,11 @@ def verify(
                 )
                 report.add_entry(entry)
                 
-                progress.update(task, advance=1, description=f"Verifying ({i+1}/{total_files})...")
+                progress.update(
+                    task,
+                    advance=1,
+                    description=f"{verify_action} ({i+1}/{total_files})",
+                )
         
         duration = time.time() - start_time
         report.duration_seconds = duration
@@ -1375,26 +1384,35 @@ def verify(
         console.print()
         
         summary = report.summary
+        console.print(f"  Algorithm:           {use_algorithm}")
         console.print(f"  Total files:         {summary.total}")
-        console.print(f"  [green]OK:[/green]                 {summary.ok}")
-        if summary.ok_existing_duplicate > 0:
-            console.print(f"  [green]OK (duplicate):[/green]    {summary.ok_existing_duplicate}")
-        if summary.mismatch > 0:
-            console.print(f"  [red]Mismatch:[/red]          {summary.mismatch}")
-        if summary.missing_destination > 0:
-            console.print(f"  [yellow]Missing dest:[/yellow]      {summary.missing_destination}")
-        if summary.missing_source > 0:
-            console.print(f"  [yellow]Missing source:[/yellow]    {summary.missing_source}")
-        if summary.error > 0:
-            console.print(f"  [red]Errors:[/red]            {summary.error}")
+        console.print(f"  [green]OK:[/green]                  {summary.ok}")
+        console.print(f"  [green]OK (duplicate):[/green]      {summary.ok_existing_duplicate}")
+        console.print(f"  [red]Mismatch:[/red]             {summary.mismatch}")
+        console.print(f"  [yellow]Missing dest:[/yellow]       {summary.missing_destination}")
+        console.print(f"  [yellow]Missing source:[/yellow]     {summary.missing_source}")
+        console.print(f"  [red]Errors:[/red]               {summary.error}")
         
         console.print()
         console.print(f"[dim]Duration: {duration:.1f}s[/dim]")
         console.print(f"[dim]Report saved to: {report_path}[/dim]")
         
+        console.print()
+        cleanup_eligible = summary.cleanup_eligible_count
+        not_eligible = summary.total - cleanup_eligible
         if summary.ok + summary.ok_existing_duplicate == summary.total:
-            console.print()
-            console.print("[green]✓ All files verified OK![/green]")
+            if use_algorithm == "sha256":
+                console.print("[green]All files verified (sha256). All entries eligible for cleanup.[/green]")
+            else:
+                console.print("[yellow]All files passed quick check (size-only). Not eligible for cleanup by default.[/yellow]")
+        else:
+            if cleanup_eligible > 0:
+                console.print(
+                    f"[yellow]Partial verification:[/yellow] {cleanup_eligible} files eligible for cleanup; "
+                    f"{not_eligible} not eligible (missing/mismatch/error)."
+                )
+            else:
+                console.print("[yellow]No files eligible for cleanup (missing/mismatch/error or quick verification).[/yellow]")
         
         raise typer.Exit(0)
     
@@ -1525,15 +1543,24 @@ def verify(
     )
     
     # Run verification with progress
+    verify_action = (
+        "Hashing (sha256) and comparing..."
+        if use_algorithm == "sha256"
+        else "Quick check (size-only)..."
+    )
     with Progress(
         SpinnerColumn(),
         TextColumn("[progress.description]{task.description}"),
         console=console,
     ) as progress:
-        task = progress.add_task("Verifying files...", total=len(verifiable))
+        task = progress.add_task(verify_action, total=len(verifiable))
         
         def update_progress(current, total):
-            progress.update(task, completed=current, description=f"Verifying files ({current}/{total})...")
+            progress.update(
+                task,
+                completed=current,
+                description=f"{verify_action} ({current}/{total})",
+            )
         
         report = verifier.verify_from_run_record(run_record, progress_callback=update_progress)
     
@@ -1546,28 +1573,37 @@ def verify(
     # Display results
     console.print()
     console.print("[bold]Verification Results:[/bold]")
+    console.print(f"  Algorithm: {use_algorithm}")
+    console.print(f"  Total files: {report.summary.total}")
     console.print(f"  ✅ OK: {report.summary.ok}")
-    if report.summary.ok_existing_duplicate:
-        console.print(f"  ✅ OK (existing duplicate): {report.summary.ok_existing_duplicate}")
-    if report.summary.mismatch:
-        console.print(f"  ❌ Mismatch: {report.summary.mismatch}")
-    if report.summary.missing_destination:
-        console.print(f"  ⚠️  Missing destination: {report.summary.missing_destination}")
-    if report.summary.missing_source:
-        console.print(f"  ⚠️  Missing source: {report.summary.missing_source}")
-    if report.summary.error:
-        console.print(f"  ❗ Errors: {report.summary.error}")
-    if report.summary.skipped:
-        console.print(f"  ⏭️  Skipped: {report.summary.skipped}")
+    console.print(f"  ✅ OK (existing duplicate): {report.summary.ok_existing_duplicate}")
+    console.print(f"  ❌ Mismatch: {report.summary.mismatch}")
+    console.print(f"  ⚠️  Missing destination: {report.summary.missing_destination}")
+    console.print(f"  ⚠️  Missing source: {report.summary.missing_source}")
+    console.print(f"  ❗ Errors: {report.summary.error}")
+    console.print(f"  ⏭️  Skipped: {report.summary.skipped}")
     
     console.print()
     console.print(f"Duration: {report.duration_seconds:.1f}s")
     console.print(f"Report: {report_path}")
     
-    # Show cleanup hint if there are OK entries
-    if report.summary.cleanup_eligible_count > 0:
-        console.print()
-        console.print(f"[green]{report.summary.cleanup_eligible_count} files eligible for cleanup.[/green]")
+    cleanup_eligible = report.summary.cleanup_eligible_count
+    not_eligible = report.summary.total - cleanup_eligible
+    console.print()
+    if report.summary.ok + report.summary.ok_existing_duplicate == report.summary.total:
+        if use_algorithm == "sha256":
+            console.print("[green]All files verified (sha256). All entries eligible for cleanup.[/green]")
+        else:
+            console.print("[yellow]All files passed quick check (size-only). Not eligible for cleanup by default.[/yellow]")
+    else:
+        if cleanup_eligible > 0:
+            console.print(
+                f"[yellow]Partial verification:[/yellow] {cleanup_eligible} files eligible for cleanup; "
+                f"{not_eligible} not eligible (missing/mismatch/error)."
+            )
+        else:
+            console.print("[yellow]No files eligible for cleanup (missing/mismatch/error or quick verification).[/yellow]")
+    if cleanup_eligible > 0:
         console.print("Run 'chronoclean cleanup --only ok' to delete verified sources.")
 
 
