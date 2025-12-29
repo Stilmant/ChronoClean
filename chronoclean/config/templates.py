@@ -20,7 +20,8 @@ sorting:
 
 # video_metadata:
 #   enabled: true              # Extract dates from video files (v0.3)
-#   providers: ["ffprobe", "hachoir"]
+#   provider: "ffprobe"        # ffprobe (preferred) or hachoir
+#   fallback_to_hachoir: true  # Use hachoir if ffprobe unavailable
 
 # filename_date:
 #   enabled: true              # Extract dates from filenames (v0.2)
@@ -151,9 +152,10 @@ duplicates:
 # ============================================================================
 video_metadata:
   enabled: true               # Enable video metadata extraction
-  providers:                  # Extraction methods in priority order
-    - "ffprobe"               # Fast & accurate (requires ffprobe)
-    - "hachoir"               # Pure Python fallback (always available)
+  provider: "ffprobe"         # ffprobe (preferred) or hachoir
+  ffprobe_path: "ffprobe"     # Path to ffprobe binary
+  fallback_to_hachoir: true   # Use hachoir if ffprobe unavailable
+  skip_errors: true           # Continue on metadata read failures
 
 # ============================================================================
 # FILENAME DATE PARSING (v0.2)

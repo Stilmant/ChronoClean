@@ -16,6 +16,7 @@ from chronoclean.core.sorter import Sorter
 from chronoclean.core.renamer import Renamer, ConflictResolver
 from chronoclean.core.folder_tagger import FolderTagger
 from chronoclean.core.date_inference import DateInferenceEngine
+from chronoclean.core.video_metadata import VideoMetadataReader
 from chronoclean.core.exif_reader import ExifReader
 from chronoclean.core.file_operations import FileOperations, BatchOperations, FileOperationError
 from chronoclean.core.models import OperationPlan
@@ -54,6 +55,10 @@ def _build_date_priority(cfg: ChronoCleanConfig) -> list[str]:
         Priority list for DateInferenceEngine
     """
     base_priority = list(cfg.sorting.fallback_date_priority)
+    
+    # v0.3: Strip video_metadata if disabled
+    if not cfg.video_metadata.enabled:
+        base_priority = [p for p in base_priority if p != "video_metadata"]
     
     # Only add filename to priority if enabled
     if not cfg.filename_date.enabled:
@@ -195,6 +200,14 @@ def scan(
     # Create components from config
     exif_reader = ExifReader(skip_errors=cfg.scan.skip_exif_errors)
     
+    # v0.3: Create video metadata reader with config
+    video_reader = VideoMetadataReader(
+        provider=cfg.video_metadata.provider,
+        ffprobe_path=cfg.video_metadata.ffprobe_path,
+        fallback_to_hachoir=cfg.video_metadata.fallback_to_hachoir,
+        skip_errors=cfg.video_metadata.skip_errors,
+    ) if cfg.video_metadata.enabled else None
+    
     folder_tagger = FolderTagger(
         ignore_list=cfg.folder_tags.ignore_list,
         force_list=cfg.folder_tags.force_list,
@@ -206,8 +219,10 @@ def scan(
     date_engine = DateInferenceEngine(
         priority=_build_date_priority(cfg),
         exif_reader=exif_reader,
+        video_reader=video_reader,
         year_cutoff=cfg.filename_date.year_cutoff,
         filename_date_enabled=cfg.filename_date.enabled,
+        video_metadata_enabled=cfg.video_metadata.enabled,
     )
 
     # Create scanner with config values
@@ -423,11 +438,22 @@ def apply(
     )
     
     exif_reader = ExifReader(skip_errors=cfg.scan.skip_exif_errors)
+    
+    # v0.3: Create video metadata reader with config
+    video_reader = VideoMetadataReader(
+        provider=cfg.video_metadata.provider,
+        ffprobe_path=cfg.video_metadata.ffprobe_path,
+        fallback_to_hachoir=cfg.video_metadata.fallback_to_hachoir,
+        skip_errors=cfg.video_metadata.skip_errors,
+    ) if cfg.video_metadata.enabled else None
+    
     date_engine = DateInferenceEngine(
         priority=_build_date_priority(cfg),
         year_cutoff=cfg.filename_date.year_cutoff,
         filename_date_enabled=cfg.filename_date.enabled,
         exif_reader=exif_reader,
+        video_reader=video_reader,
+        video_metadata_enabled=cfg.video_metadata.enabled,
     )
 
     # Scan files
@@ -821,11 +847,22 @@ def _perform_scan(
     )
     
     exif_reader = ExifReader(skip_errors=cfg.scan.skip_exif_errors)
+    
+    # v0.3: Create video metadata reader with config
+    video_reader = VideoMetadataReader(
+        provider=cfg.video_metadata.provider,
+        ffprobe_path=cfg.video_metadata.ffprobe_path,
+        fallback_to_hachoir=cfg.video_metadata.fallback_to_hachoir,
+        skip_errors=cfg.video_metadata.skip_errors,
+    ) if cfg.video_metadata.enabled else None
+    
     date_engine = DateInferenceEngine(
         priority=_build_date_priority(cfg),
         year_cutoff=cfg.filename_date.year_cutoff,
         filename_date_enabled=cfg.filename_date.enabled,
         exif_reader=exif_reader,
+        video_reader=video_reader,
+        video_metadata_enabled=cfg.video_metadata.enabled,
     )
 
     # Create scanner with config values

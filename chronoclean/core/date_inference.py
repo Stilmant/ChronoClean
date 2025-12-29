@@ -71,9 +71,10 @@ class DateInferenceEngine:
         self,
         priority: Optional[list[str]] = None,
         exif_reader: Optional[ExifReader] = None,
-        video_reader: Optional[VideoMetadataReader] = None,
+        video_reader: Optional["VideoMetadataReader"] = None,
         year_cutoff: int = 30,
         filename_date_enabled: bool = True,
+        video_metadata_enabled: bool = True,
     ):
         """
         Initialize the date inference engine.
@@ -82,13 +83,24 @@ class DateInferenceEngine:
             priority: Ordered list of sources to try.
                       Default: ["exif", "video_metadata", "filename", "filesystem", "folder_name"]
             exif_reader: ExifReader instance (optional, created if not provided)
-            video_reader: VideoMetadataReader instance (optional, created if not provided)
+            video_reader: VideoMetadataReader instance (optional, created with defaults if not provided
+                          and video_metadata_enabled is True)
             year_cutoff: For 2-digit years: 00-cutoff = 2000s, cutoff-99 = 1900s
             filename_date_enabled: Whether to extract dates from filenames
+            video_metadata_enabled: Whether video metadata extraction is enabled
         """
         self.priority = priority or ["exif", "video_metadata", "filename", "filesystem", "folder_name"]
         self.exif_reader = exif_reader or ExifReader()
-        self.video_reader = video_reader or VideoMetadataReader()
+        self.video_metadata_enabled = video_metadata_enabled
+        
+        # Create default video reader if enabled and not provided
+        if video_reader is not None:
+            self.video_reader = video_reader
+        elif video_metadata_enabled:
+            self.video_reader = VideoMetadataReader()
+        else:
+            self.video_reader = None
+            
         self.year_cutoff = year_cutoff
         self.filename_date_enabled = filename_date_enabled
 
@@ -113,16 +125,27 @@ class DateInferenceEngine:
             file_path: Path to the file
             file_type: Optional file type hint (IMAGE, VIDEO, RAW).
                        If provided, skips inapplicable sources.
+                       If None, video_metadata is skipped for safety.
 
         Returns:
             Tuple of (datetime or None, DateSource indicating origin)
         """
         for source_name in self.priority:
-            # Skip EXIF for videos and video_metadata for images
+            # Skip EXIF for videos
             if file_type == FileType.VIDEO and source_name == "exif":
                 continue
-            if file_type in (FileType.IMAGE, FileType.RAW) and source_name == "video_metadata":
-                continue
+            
+            # Skip video_metadata for non-videos or when disabled
+            if source_name == "video_metadata":
+                # Skip if video metadata is disabled
+                if not self.video_metadata_enabled or self.video_reader is None:
+                    continue
+                # Skip for images/raw files
+                if file_type in (FileType.IMAGE, FileType.RAW):
+                    continue
+                # Skip if file_type not specified (safety: don't run ffprobe on unknown files)
+                if file_type is None:
+                    continue
             
             method = self._source_methods.get(source_name)
             if not method:
@@ -169,8 +192,10 @@ class DateInferenceEngine:
             file_path: Path to the video file
 
         Returns:
-            datetime or None
+            datetime or None (also returns None if video_reader is disabled)
         """
+        if self.video_reader is None:
+            return None
         result = self._get_video_metadata_date(file_path)
         if result:
             return result[0]
@@ -185,6 +210,8 @@ class DateInferenceEngine:
 
     def _get_video_metadata_date(self, file_path: Path) -> Optional[tuple[datetime, DateSource]]:
         """Extract date from video metadata (creation_time, etc.)."""
+        if self.video_reader is None:
+            return None
         date = self.video_reader.get_creation_date(file_path)
         if date:
             return date, DateSource.VIDEO_METADATA

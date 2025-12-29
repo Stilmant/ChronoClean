@@ -244,6 +244,15 @@ class Scanner:
         record.detected_date = detected_date
         record.date_source = date_source
         record.has_exif = date_source == DateSource.EXIF
+        
+        # v0.3: Set error category for files without dates
+        if date_source == DateSource.UNKNOWN:
+            if file_type == FileType.VIDEO:
+                record.error_category = "no_video_metadata"
+            elif file_type in (FileType.IMAGE, FileType.RAW):
+                record.error_category = "no_exif_date"
+            else:
+                record.error_category = "no_date_found"
 
         # v0.3: Extract video metadata date for video files
         if file_type == FileType.VIDEO:

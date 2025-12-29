@@ -271,23 +271,26 @@ Extract creation dates from video container metadata (MP4, MOV, MKV, etc.).
 ```yaml
 video_metadata:
   enabled: true               # Enable video metadata extraction
-  providers:                  # Extraction methods in priority order
-    - "ffprobe"               # Fast & accurate (requires ffprobe installed)
-    - "hachoir"               # Pure Python fallback (always available)
+  provider: "ffprobe"         # ffprobe (preferred) or hachoir
+  ffprobe_path: "ffprobe"     # Path to ffprobe binary
+  fallback_to_hachoir: true   # Use hachoir if ffprobe unavailable
+  skip_errors: true           # Continue on metadata read failures
 ```
 
 **Provider comparison:**
 | Provider | Pros | Cons |
 |----------|------|------|
 | `ffprobe` | Fast, handles most formats | Requires FFmpeg installation |
-| `hachoir` | Pure Python, no dependencies | Slower, fewer formats |
+| `hachoir` | Pure Python, no external deps | Slower, fewer formats |
 
 **Installing ffprobe:**
 - **Windows:** Download from [ffmpeg.org](https://ffmpeg.org/download.html) or use `winget install ffmpeg`
 - **macOS:** `brew install ffmpeg`
 - **Linux:** `apt install ffmpeg` or `dnf install ffmpeg`
 
-ChronoClean automatically falls back to `hachoir` if `ffprobe` is not available.
+When `provider: "ffprobe"` and ffprobe is unavailable:
+- If `fallback_to_hachoir: true` and hachoir is installed, uses hachoir
+- Otherwise, video metadata is skipped (with warning if `skip_errors: false`)
 
 ### `export` — Export Settings (v0.2)
 

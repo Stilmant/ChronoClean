@@ -33,6 +33,38 @@ VIDEO_DATE_FORMATS = [
 ]
 
 
+def parse_video_date(value: Optional[str]) -> Optional[datetime]:
+    """Parse a date string using known video date formats.
+    
+    Standalone function for testing and external use.
+    
+    Args:
+        value: Date string to parse
+        
+    Returns:
+        datetime if successfully parsed, None otherwise
+    """
+    if not value or not isinstance(value, str):
+        return None
+    
+    value = value.strip()
+    
+    # Handle timezone offset format differences
+    # Convert +0000 to +00:00 for Python's %z
+    value = re.sub(r'([+-])(\d{2})(\d{2})$', r'\1\2:\3', value)
+    
+    for fmt in VIDEO_DATE_FORMATS:
+        try:
+            dt = datetime.strptime(value, fmt)
+            # Return naive datetime (strip timezone for consistency)
+            return dt.replace(tzinfo=None)
+        except ValueError:
+            continue
+    
+    logger.debug(f"Could not parse date string: {value}")
+    return None
+
+
 class VideoMetadataReader:
     """Extract metadata from video files.
     
@@ -270,25 +302,7 @@ class VideoMetadataReader:
         Returns:
             datetime if successfully parsed, None otherwise
         """
-        if not value or not isinstance(value, str):
-            return None
-        
-        value = value.strip()
-        
-        # Handle timezone offset format differences
-        # Convert +0000 to +00:00 for Python's %z
-        value = re.sub(r'([+-])(\d{2})(\d{2})$', r'\1\2:\3', value)
-        
-        for fmt in VIDEO_DATE_FORMATS:
-            try:
-                dt = datetime.strptime(value, fmt)
-                # Return naive datetime (strip timezone for consistency)
-                return dt.replace(tzinfo=None)
-            except ValueError:
-                continue
-        
-        logger.debug(f"Could not parse date string: {value}")
-        return None
+        return parse_video_date(value)
 
     def get_all_metadata(self, path: Path) -> dict:
         """Get all available metadata from a video file.

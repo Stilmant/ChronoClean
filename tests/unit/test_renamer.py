@@ -316,3 +316,91 @@ class TestEdgeCases:
             original = Path(f"photo{ext.upper()}")
             result = renamer.generate_filename(original, date)
             assert result.endswith(ext)
+
+class TestGenerateFilenameTagOnly:
+    """Tests for generate_filename_tag_only method (v0.3)."""
+
+    def test_basic_tag_only(self):
+        """Basic tag-only rename preserves original name."""
+        renamer = Renamer()
+        original = Path("IMG_1234.JPG")
+
+        result = renamer.generate_filename_tag_only(original, "Paris")
+
+        assert result == "IMG_1234_Paris.jpg"
+
+    def test_tag_only_preserves_stem(self):
+        """Original filename stem is preserved."""
+        renamer = Renamer()
+        original = Path("vacation_photo_2024.jpg")
+
+        result = renamer.generate_filename_tag_only(original, "Beach")
+
+        assert result == "vacation_photo_2024_Beach.jpg"
+
+    def test_tag_only_with_counter(self):
+        """Counter is appended for duplicates."""
+        renamer = Renamer()
+        original = Path("IMG_1234.jpg")
+
+        result = renamer.generate_filename_tag_only(original, "Paris", counter=1)
+
+        assert result == "IMG_1234_Paris_001.jpg"
+
+    def test_tag_only_lowercase_extension(self):
+        """Extension is lowercased by default."""
+        renamer = Renamer(lowercase_ext=True)
+        original = Path("IMG_1234.JPG")
+
+        result = renamer.generate_filename_tag_only(original, "Paris")
+
+        assert result.endswith(".jpg")
+
+    def test_tag_only_preserve_extension_case(self):
+        """Extension case can be preserved."""
+        renamer = Renamer(lowercase_ext=False)
+        original = Path("IMG_1234.JPG")
+
+        result = renamer.generate_filename_tag_only(original, "Paris")
+
+        assert result.endswith(".JPG")
+
+    def test_tag_only_cleans_tag(self):
+        """Tag is cleaned and formatted."""
+        renamer = Renamer()
+        original = Path("IMG_1234.jpg")
+
+        # Special characters should be removed
+        result = renamer.generate_filename_tag_only(original, "Paris Trip!")
+
+        assert "!" not in result
+        assert "Paris" in result
+
+    def test_tag_only_handles_spaces_in_tag(self):
+        """Spaces in tag are converted to underscores."""
+        renamer = Renamer()
+        original = Path("IMG_1234.jpg")
+
+        result = renamer.generate_filename_tag_only(original, "Beach Vacation")
+
+        assert " " not in result
+        assert "_" in result
+
+    def test_tag_only_removes_double_underscores(self):
+        """Double underscores are collapsed."""
+        renamer = Renamer()
+        original = Path("IMG__1234.jpg")  # Stem has double underscore
+
+        result = renamer.generate_filename_tag_only(original, "Paris")
+
+        assert "__" not in result
+
+    def test_tag_only_various_extensions(self):
+        """Works with various file types."""
+        renamer = Renamer()
+        
+        for ext in [".jpg", ".png", ".heic", ".mp4", ".cr2", ".mov"]:
+            original = Path(f"photo{ext.upper()}")
+            result = renamer.generate_filename_tag_only(original, "Tag")
+            assert result.endswith(ext)
+            assert "Tag" in result
