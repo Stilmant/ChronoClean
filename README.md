@@ -188,6 +188,40 @@ Planned command split for clarity:
 
 ---
 
+## Ideal Use Cases
+
+### Minimal (quick, one folder)
+Use when you just want to organize a folder, with a safety dry-run first:
+
+```bash
+python -m chronoclean apply D:\photos\incoming D:\photos\archive --dry-run
+python -m chronoclean apply D:\photos\incoming D:\photos\archive --no-dry-run
+```
+
+Optional (info-only):
+
+```bash
+python -m chronoclean scan D:\photos\incoming
+```
+
+### Safe archival (copy + verify + optional cleanup) (planned v0.3.1)
+Use when you want cryptographic confirmation before deleting sources:
+
+```bash
+python -m chronoclean apply D:\photos\incoming D:\photos\archive --no-dry-run
+python -m chronoclean verify --source D:\photos\incoming --destination D:\photos\archive -o verify.json
+python -m chronoclean cleanup --source D:\photos\incoming --destination D:\photos\archive --only ok --dry-run
+python -m chronoclean cleanup --source D:\photos\incoming --destination D:\photos\archive --only ok --no-dry-run
+```
+
+### Recovery (you forgot the apply report) (planned v0.3.1)
+Use when you copied files but did not keep a run report:
+
+```bash
+python -m chronoclean verify --source D:\photos\incoming --destination D:\photos\archive --reconstruct -o verify.json
+python -m chronoclean cleanup --source D:\photos\incoming --destination D:\photos\archive --only ok --no-dry-run
+```
+
 ## High-Level Structure (indicative)
 ```
 chronoclean/
@@ -315,7 +349,8 @@ ChronoClean development follows a phased approach from prototype to production-r
 
 > 📄 **See [docs/IMPLEMENTATION_SPEC_v0.1.md](docs/IMPLEMENTATION_SPEC_v0.1.md) for v0.1 implementation details.**  
 > 📄 **See [docs/IMPLEMENTATION_SPEC_v0.2.md](docs/IMPLEMENTATION_SPEC_v0.2.md) for v0.2 implementation details.**  
-> 📄 **See [docs/IMPLEMENTATION_SPEC_v0.2.md](docs/IMPLEMENTATION_SPEC_v0.2.md) for v0.2 planning.**
+> 📄 **See [docs/IMPLEMENTATION_SPEC_v0.3.md](docs/IMPLEMENTATION_SPEC_v0.3.md) for v0.3 planning.**  
+> 📄 **See [docs/IMPLEMENTATION_SPEC_v0.3.1.md](docs/IMPLEMENTATION_SPEC_v0.3.1.md) for v0.3.1 planning.**
 
 ### v0.1 – Prototype ✅ Complete
 - ✅ Project structure and configuration system (YAML-based)
@@ -348,6 +383,12 @@ ChronoClean development follows a phased approach from prototype to production-r
 - ✅ Improved metadata error handling/logging (clear per-file reason + summary counts by category)
 - ✅ Decouple tagging from date renaming; allow tag-only filenames (append tags even when `--rename` is off)
 - Deferred to future: Optional heuristics for "no metadata" cases (config placeholder added)
+
+### v0.3.1 - Verification & Safe Cleanup
+- Planned: Apply run report (capture `source -> destination` mapping for later verification)
+- Planned: `verify` command (hash-based; default SHA-256) to confirm copy integrity
+- Planned: `cleanup` command to delete only sources verified OK (supports partial cleanup)
+- Planned: Recovery path when the apply report was forgotten (`verify --reconstruct`)
 
 ### v0.4 - User Experience & Safety
 - Unambiguous command split:
