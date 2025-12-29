@@ -134,11 +134,12 @@ class Scanner:
                     folder_tags_seen.add(record.folder_tag)
 
                 # v0.3: Track error categories from records
+                # Only count the specific error category, not also "no_date_found"
+                # error_category is set for no_exif_date, no_video_metadata, etc.
                 if record.error_category:
                     result.increment_error_category(record.error_category)
-                
-                # v0.3: Track files with no date found
-                if record.date_source == DateSource.UNKNOWN:
+                elif record.date_source == DateSource.UNKNOWN:
+                    # Fallback for files without a specific error category
                     result.increment_error_category("no_date_found")
                 
                 # v0.2: Track date mismatches

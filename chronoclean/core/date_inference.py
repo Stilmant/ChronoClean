@@ -192,9 +192,9 @@ class DateInferenceEngine:
             file_path: Path to the video file
 
         Returns:
-            datetime or None (also returns None if video_reader is disabled)
+            datetime or None (also returns None if video metadata is disabled)
         """
-        if self.video_reader is None:
+        if not self.video_metadata_enabled or self.video_reader is None:
             return None
         result = self._get_video_metadata_date(file_path)
         if result:
@@ -210,7 +210,7 @@ class DateInferenceEngine:
 
     def _get_video_metadata_date(self, file_path: Path) -> Optional[tuple[datetime, DateSource]]:
         """Extract date from video metadata (creation_time, etc.)."""
-        if self.video_reader is None:
+        if not self.video_metadata_enabled or self.video_reader is None:
             return None
         date = self.video_reader.get_creation_date(file_path)
         if date:

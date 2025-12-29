@@ -168,6 +168,8 @@ class VideoMetadataReader:
         3. date / DATE tags
         """
         if not self._check_ffprobe():
+            if not self.skip_errors:
+                logger.warning(f"ffprobe not available for {path.name}")
             return None
         
         try:
@@ -189,7 +191,10 @@ class VideoMetadataReader:
             )
             
             if result.returncode != 0:
-                logger.debug(f"ffprobe returned non-zero for {path.name}: {result.stderr}")
+                if not self.skip_errors:
+                    logger.warning(f"ffprobe returned non-zero for {path.name}: {result.stderr}")
+                else:
+                    logger.debug(f"ffprobe returned non-zero for {path.name}: {result.stderr}")
                 return None
             
             data = json.loads(result.stdout)
@@ -244,6 +249,8 @@ class VideoMetadataReader:
     def _hachoir_date(self, path: Path) -> Optional[datetime]:
         """Extract creation date using hachoir library."""
         if not self._check_hachoir():
+            if not self.skip_errors:
+                logger.warning(f"hachoir not available for {path.name}")
             return None
         
         try:
