@@ -26,6 +26,17 @@ from chronoclean.utils.logging import setup_logging
 # Initialize console
 console = Console()
 
+# Load config at module level to generate dynamic help text
+# This allows --help to show actual defaults from config (or built-in if no config)
+_default_cfg = ConfigLoader.load(None)
+_has_config_file = any(p.exists() for p in ConfigLoader.DEFAULT_CONFIG_PATHS)
+_cfg_note = " via config" if _has_config_file else ""
+
+
+def _bool_show_default(value: bool, true_word: str, false_word: str) -> str:
+    """Generate show_default string for boolean flags."""
+    return f"{true_word if value else false_word}{_cfg_note}"
+
 
 def _build_date_priority(cfg: ChronoCleanConfig) -> list[str]:
     """
@@ -136,8 +147,16 @@ def _show_config_info(cfg: ChronoCleanConfig, config_path: Optional[Path]) -> No
 @app.command()
 def scan(
     source: Path = typer.Argument(..., help="Source directory to scan"),
-    recursive: Optional[bool] = typer.Option(None, "--recursive/--no-recursive", help="Scan subfolders"),
-    videos: Optional[bool] = typer.Option(None, "--videos/--no-videos", help="Include video files"),
+    recursive: Optional[bool] = typer.Option(
+        None, "--recursive/--no-recursive",
+        help="Scan subfolders",
+        show_default=_bool_show_default(_default_cfg.general.recursive, "recursive", "no-recursive"),
+    ),
+    videos: Optional[bool] = typer.Option(
+        None, "--videos/--no-videos",
+        help="Include video files",
+        show_default=_bool_show_default(_default_cfg.general.include_videos, "videos", "no-videos"),
+    ),
     limit: Optional[int] = typer.Option(None, "--limit", "-l", help="Limit files (for debugging)"),
     config: Optional[Path] = typer.Option(None, "--config", "-c", help="Config file path"),
     report: bool = typer.Option(False, "--report", "-r", help="Show detailed per-file report"),
@@ -297,13 +316,37 @@ def scan(
 def apply(
     source: Path = typer.Argument(..., help="Source directory"),
     destination: Path = typer.Argument(..., help="Destination directory"),
-    dry_run: Optional[bool] = typer.Option(None, "--dry-run/--no-dry-run", help="Simulate without changes"),
+    dry_run: Optional[bool] = typer.Option(
+        None, "--dry-run/--no-dry-run",
+        help="Simulate without changes",
+        show_default=_bool_show_default(_default_cfg.general.dry_run_default, "dry-run", "no-dry-run"),
+    ),
     move: bool = typer.Option(False, "--move", help="Move files instead of copy (default: copy)"),
-    rename: Optional[bool] = typer.Option(None, "--rename/--no-rename", help="Enable file renaming"),
-    tag_names: Optional[bool] = typer.Option(None, "--tag-names/--no-tag-names", help="Add folder tags"),
-    recursive: Optional[bool] = typer.Option(None, "--recursive/--no-recursive", help="Scan subfolders"),
-    videos: Optional[bool] = typer.Option(None, "--videos/--no-videos", help="Include video files"),
-    structure: Optional[str] = typer.Option(None, "--structure", "-s", help="Folder structure"),
+    rename: Optional[bool] = typer.Option(
+        None, "--rename/--no-rename",
+        help="Enable file renaming",
+        show_default=_bool_show_default(_default_cfg.renaming.enabled, "rename", "no-rename"),
+    ),
+    tag_names: Optional[bool] = typer.Option(
+        None, "--tag-names/--no-tag-names",
+        help="Add folder tags",
+        show_default=_bool_show_default(_default_cfg.folder_tags.enabled, "tag-names", "no-tag-names"),
+    ),
+    recursive: Optional[bool] = typer.Option(
+        None, "--recursive/--no-recursive",
+        help="Scan subfolders",
+        show_default=_bool_show_default(_default_cfg.general.recursive, "recursive", "no-recursive"),
+    ),
+    videos: Optional[bool] = typer.Option(
+        None, "--videos/--no-videos",
+        help="Include video files",
+        show_default=_bool_show_default(_default_cfg.general.include_videos, "videos", "no-videos"),
+    ),
+    structure: Optional[str] = typer.Option(
+        None, "--structure", "-s",
+        help="Folder structure",
+        show_default=f"{_default_cfg.sorting.folder_structure}{_cfg_note}",
+    ),
     force: bool = typer.Option(False, "--force", "-f", help="Skip confirmation"),
     limit: Optional[int] = typer.Option(None, "--limit", "-l", help="Limit files"),
     config: Optional[Path] = typer.Option(None, "--config", "-c", help="Config file path"),
@@ -798,10 +841,12 @@ def export_json(
     recursive: Optional[bool] = typer.Option(
         None, "--recursive/--no-recursive",
         help="Scan subfolders",
+        show_default=_bool_show_default(_default_cfg.general.recursive, "recursive", "no-recursive"),
     ),
     videos: Optional[bool] = typer.Option(
         None, "--videos/--no-videos",
         help="Include video files",
+        show_default=_bool_show_default(_default_cfg.general.include_videos, "videos", "no-videos"),
     ),
     limit: Optional[int] = typer.Option(
         None, "--limit", "-l",
@@ -864,10 +909,12 @@ def export_csv(
     recursive: Optional[bool] = typer.Option(
         None, "--recursive/--no-recursive",
         help="Scan subfolders",
+        show_default=_bool_show_default(_default_cfg.general.recursive, "recursive", "no-recursive"),
     ),
     videos: Optional[bool] = typer.Option(
         None, "--videos/--no-videos",
         help="Include video files",
+        show_default=_bool_show_default(_default_cfg.general.include_videos, "videos", "no-videos"),
     ),
     limit: Optional[int] = typer.Option(
         None, "--limit", "-l",

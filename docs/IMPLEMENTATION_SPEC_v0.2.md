@@ -153,7 +153,7 @@ date_mismatch:
 ```json
 {
   "metadata": {
-    "version": "0.2.0",
+    "version": "0.2.1",
     "export_timestamp": "2024-03-15T14:30:00Z",
     "source_root": "/volume1/photos/unsorted",
     "total_files": 1000
@@ -612,7 +612,7 @@ class ExportConfig:
 
 ```toml
 [project]
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
     "exifread>=3.0.0",
     "typer>=0.9.0",

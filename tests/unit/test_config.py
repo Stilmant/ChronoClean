@@ -193,7 +193,7 @@ class TestConfigLoader:
         """Load from a YAML file."""
         config_path = temp_dir / "test_config.yaml"
         config_path.write_text("""
-version: "2.0"
+version: "2.1"
 general:
   recursive: false
   include_videos: false
@@ -203,7 +203,7 @@ sorting:
 
         config = ConfigLoader.load(config_path)
 
-        assert config.version == "2.0"
+        assert config.version == "2.1"
         assert config.general.recursive is False
         assert config.general.include_videos is False
         assert config.sorting.folder_structure == "YYYY/MM/DD"
