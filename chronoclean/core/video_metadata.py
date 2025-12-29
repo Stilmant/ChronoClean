@@ -235,14 +235,20 @@ class VideoMetadataReader:
             return None
             
         except subprocess.TimeoutExpired:
-            logger.warning(f"ffprobe timed out for {path.name}")
+            if self.skip_errors:
+                logger.debug(f"ffprobe timed out for {path.name}")
+            else:
+                logger.warning(f"ffprobe timed out for {path.name}")
             return None
         except json.JSONDecodeError as e:
-            logger.warning(f"Failed to parse ffprobe JSON output for {path.name}: {e}")
+            if self.skip_errors:
+                logger.debug(f"Failed to parse ffprobe JSON output for {path.name}: {e}")
+            else:
+                logger.warning(f"Failed to parse ffprobe JSON output for {path.name}: {e}")
             return None
         except Exception as e:
             if self.skip_errors:
-                logger.warning(f"ffprobe error for {path.name}: {e}")
+                logger.debug(f"ffprobe error for {path.name}: {e}")
                 return None
             raise
 
@@ -296,7 +302,7 @@ class VideoMetadataReader:
             
         except Exception as e:
             if self.skip_errors:
-                logger.warning(f"hachoir error for {path.name}: {e}")
+                logger.debug(f"hachoir error for {path.name}: {e}")
                 return None
             raise
 
