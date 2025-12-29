@@ -339,10 +339,11 @@ ChronoClean development follows a phased approach from prototype to production-r
 - Planned: `report` command for detailed analysis output
 
 ### v0.3 - Video & Advanced Metadata
-- Video “taken date” extraction (choose backend: `ffmpeg/ffprobe` vs `hachoir`) and map it into `DateSource`
-- Unify “best date” resolution across image+video metadata + filesystem + filename + folder-name (same priority system)
+- Video "taken date" extraction (choose backend: `ffmpeg/ffprobe` vs `hachoir`) and map it into `DateSource`
+- Unify "best date" resolution across image+video metadata + filesystem + filename + folder-name (same priority system)
 - Improve metadata error handling/logging (clear per-file reason + summary counts)
-- Optional (opt-in) heuristics for “no metadata” cases (e.g., clustering), kept deterministic
+- Optional (opt-in) heuristics for "no metadata" cases (e.g., clustering), kept deterministic
+- Decouple tagging from date renaming; allow tag-only filenames (append tags even when `--rename` is off)
 
 ### v0.4 - User Experience & Safety
 - Unambiguous command split:
@@ -352,8 +353,9 @@ ChronoClean development follows a phased approach from prototype to production-r
 - `dryrun --from-plan <plan.json>` (optional; `apply --dry-run` remains for quick runs)
 - `report` command(s) for scan/plan/apply summaries (mismatches, collisions, duplicates)
 - Interactive review (Rich): confirm risky ops, inspect collisions, accept/reject tags/renames
+- Conditional rename for garbage filenames (optional)
 - Persistent state for tag decisions/overrides (separate from main YAML), plus optional `config set`
-- Safety gates: disk-space check, live-mode warnings, backup reminders, clearer “what will change”
+- Safety gates: disk-space check, live-mode warnings, backup reminders, clearer "what will change"
 
 ### v0.5 - NAS & Large-Scale Support
 - Implement performance knobs: parallel scan/inference (configurable workers) and memory-efficient iteration

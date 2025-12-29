@@ -470,7 +470,9 @@ The following features were explicitly **deferred** to later versions:
 | Filename date parsing | v0.2 | Detect dates in filenames like `IMG_090831.jpg` |
 | Date mismatch warnings | v0.2 | Warn when filename date ≠ file date |
 | Video metadata extraction | v0.3 | Requires ffmpeg/hachoir |
+| Tag-only filenames | v0.3 | Allow tags to be appended without date renaming |
 | Interactive prompts | v0.4 | UX enhancement |
+| Conditional rename for garbage filenames | v0.4 | Preserve camera names unless filename is low-quality |
 | Parallel processing | v0.5 | Performance optimization |
 | Tags classify/auto commands | v0.2 | Tag management can be manual |
 
