@@ -22,6 +22,18 @@ from chronoclean.core.file_operations import FileOperations, BatchOperations, Fi
 from chronoclean.core.models import OperationPlan
 from chronoclean.core.exporter import Exporter, export_to_json, export_to_csv
 from chronoclean.core.duplicate_checker import DuplicateChecker
+from chronoclean.core.run_record_writer import RunRecordWriter, ensure_verifications_dir
+from chronoclean.core.run_discovery import (
+    discover_run_records,
+    discover_verification_reports,
+    load_run_record,
+    load_verification_report,
+    find_run_by_id,
+    find_verification_by_id,
+)
+from chronoclean.core.verifier import Verifier, create_verifier_from_config
+from chronoclean.core.verification import get_verification_filename
+from chronoclean.core.cleaner import Cleaner, format_bytes
 from chronoclean.utils.logging import setup_logging
 
 # Initialize console
@@ -372,6 +384,10 @@ def apply(
     force: bool = typer.Option(False, "--force", "-f", help="Skip confirmation"),
     limit: Optional[int] = typer.Option(None, "--limit", "-l", help="Limit files"),
     config: Optional[Path] = typer.Option(None, "--config", "-c", help="Config file path"),
+    no_run_record: bool = typer.Option(
+        False, "--no-run-record",
+        help="Disable writing apply run record (v0.3.1)",
+    ),
 ):
     """
     Apply file organization (moves and optional renames).
@@ -572,7 +588,28 @@ def apply(
         console.print()
 
     # Execute operations
+    # v0.3.1: Initialize run record writer (writes on exit)
+    write_record = cfg.verify.write_run_record and not no_run_record
+    
     if use_dry_run:
+        # For dry-run, we still write a run record if enabled (mode: dry_run)
+        if write_record:
+            with RunRecordWriter(
+                source_root=source,
+                destination_root=destination,
+                config=cfg,
+                dry_run=True,
+                move_mode=move,
+                enabled=True,
+            ) as writer:
+                # Record what would have been done
+                for op in plan.moves:
+                    writer.add_copy(op.source, op.destination_path)
+                for skip_path, skip_reason in plan.skipped:
+                    writer.add_skip(skip_path, skip_reason)
+            
+            console.print(f"[dim]Run record: {writer.output_path}[/dim]")
+        
         console.print("[yellow]Dry run complete. No files were modified.[/yellow]")
         console.print("Run with --no-dry-run to apply changes.")
     else:
@@ -592,6 +629,7 @@ def apply(
         # Process operations with collision detection
         # Track reserved destinations AND their source files for content comparison
         operations_to_execute = []
+        skipped_operations = []  # v0.3.1: Track skipped for run record
         reserved_destinations: set[Path] = set()
         reserved_sources: dict[Path, Path] = {}  # dest_path -> source_path
         duplicates_skipped = 0
@@ -609,11 +647,13 @@ def apply(
                             # Compare against existing file on disk
                             if duplicate_checker.are_duplicates(op.source, dest_path):
                                 duplicates_skipped += 1
+                                skipped_operations.append((op.source, "duplicate of existing file"))
                                 continue
                         elif dest_path in reserved_sources:
                             # Compare against the source file that reserved this destination
                             if duplicate_checker.are_duplicates(op.source, reserved_sources[dest_path]):
                                 duplicates_skipped += 1
+                                skipped_operations.append((op.source, "duplicate in batch"))
                                 continue
                         # Files have same name but different content - rename
                         dest_path = file_ops.ensure_unique_path(dest_path, reserved_destinations)
@@ -625,6 +665,7 @@ def apply(
                     elif cfg.duplicates.on_collision == "skip":
                         # Skip if destination exists or reserved
                         duplicates_skipped += 1
+                        skipped_operations.append((op.source, "collision skipped"))
                         continue
                     elif cfg.duplicates.on_collision == "fail":
                         console.print(f"[red]Error:[/red] Destination exists or reserved: {dest_path}")
@@ -635,10 +676,12 @@ def apply(
                             if dest_path.exists():
                                 if duplicate_checker.are_duplicates(op.source, dest_path):
                                     duplicates_skipped += 1
+                                    skipped_operations.append((op.source, "duplicate of existing file"))
                                     continue
                             elif dest_path in reserved_sources:
                                 if duplicate_checker.are_duplicates(op.source, reserved_sources[dest_path]):
                                     duplicates_skipped += 1
+                                    skipped_operations.append((op.source, "duplicate in batch"))
                                     continue
                         dest_path = file_ops.ensure_unique_path(dest_path, reserved_destinations)
                         collisions_renamed += 1
@@ -650,12 +693,51 @@ def apply(
             console.print(f"[red]Error:[/red] {e}", stderr=True)
             raise typer.Exit(1)
         
-        if move:
-            success, failed = batch.execute_moves(operations_to_execute)
-            action_word = "moved"
+        # v0.3.1: Write run record with actual executed operations
+        run_record_path = None
+        if write_record:
+            with RunRecordWriter(
+                source_root=source,
+                destination_root=destination,
+                config=cfg,
+                dry_run=False,
+                move_mode=move,
+                enabled=True,
+            ) as writer:
+                # Record operations that will be executed
+                for src, dest in operations_to_execute:
+                    if move:
+                        writer.add_move(src, dest)
+                    else:
+                        writer.add_copy(src, dest)
+                
+                # Record skipped files (from plan.skipped + collision skips)
+                for skip_path, skip_reason in plan.skipped:
+                    writer.add_skip(skip_path, skip_reason)
+                for skip_path, skip_reason in skipped_operations:
+                    writer.add_skip(skip_path, skip_reason)
+                
+                # Execute the actual operations
+                if move:
+                    success, failed = batch.execute_moves(operations_to_execute)
+                    action_word = "moved"
+                else:
+                    success, failed = batch.execute_copies(operations_to_execute)
+                    action_word = "copied"
+                
+                # Track failures
+                for _ in range(failed):
+                    writer.add_error()
+                
+                run_record_path = writer.output_path
         else:
-            success, failed = batch.execute_copies(operations_to_execute)
-            action_word = "copied"
+            # Execute without recording
+            if move:
+                success, failed = batch.execute_moves(operations_to_execute)
+                action_word = "moved"
+            else:
+                success, failed = batch.execute_copies(operations_to_execute)
+                action_word = "copied"
 
         console.print()
         console.print("[bold green]Complete![/bold green]")
@@ -666,6 +748,8 @@ def apply(
             console.print(f"  [yellow]Collisions renamed: {collisions_renamed}[/yellow]")
         if failed:
             console.print(f"  [red]Failed: {failed}[/red]")
+        if run_record_path:
+            console.print(f"  [dim]Run record: {run_record_path}[/dim]")
 
 
 # ============================================================================
@@ -1009,6 +1093,723 @@ def export_csv(
     else:
         # Output to stdout (without rich formatting)
         print(csv_str, end="")
+
+
+# ============================================================================
+# VERIFY COMMAND (v0.3.1)
+# ============================================================================
+
+
+@app.command()
+def verify(
+    run_file: Optional[Path] = typer.Option(
+        None, "--run-file", "-r",
+        help="Path to a specific run record file",
+    ),
+    run_id: Optional[str] = typer.Option(
+        None, "--run-id",
+        help="Run ID to verify",
+    ),
+    last: bool = typer.Option(
+        False, "--last",
+        help="Use the most recent matching run (no prompt)",
+    ),
+    yes: bool = typer.Option(
+        False, "--yes", "-y",
+        help="Auto-accept best match (fail if ambiguous)",
+    ),
+    source: Optional[Path] = typer.Option(
+        None, "--source", "-s",
+        help="Filter runs by source directory (or source for --reconstruct)",
+    ),
+    destination: Optional[Path] = typer.Option(
+        None, "--destination", "-d",
+        help="Filter runs by destination directory (or destination for --reconstruct)",
+    ),
+    reconstruct: bool = typer.Option(
+        False, "--reconstruct",
+        help="Reconstruct mapping from source/destination without run record",
+    ),
+    algorithm: Optional[str] = typer.Option(
+        None, "--algorithm", "-a",
+        help="Hash algorithm: sha256 (default) or quick",
+    ),
+    include_dry_runs: bool = typer.Option(
+        False, "--include-dry-runs",
+        help="Include dry-run records in discovery",
+    ),
+    config: Optional[Path] = typer.Option(
+        None, "--config", "-c",
+        help="Config file path",
+    ),
+):
+    """
+    Verify copy integrity using hash comparison.
+    
+    Compares source and destination files from a previous apply run.
+    By default, auto-discovers the most recent live copy run from .chronoclean/runs/.
+    
+    Use --reconstruct when you forgot to keep a run record: it rebuilds the
+    expected mapping by re-scanning source and applying the same rules.
+    
+    Examples:
+        chronoclean verify                    # Auto-discover and prompt
+        chronoclean verify --last             # Use most recent run
+        chronoclean verify --run-file run.json  # Use specific file
+        chronoclean verify --source /src --destination /dest --reconstruct
+    """
+    import time
+    from rich.progress import Progress, SpinnerColumn, TextColumn
+    
+    # Load configuration
+    cfg = ConfigLoader.load(config)
+    
+    # Determine algorithm
+    use_algorithm = algorithm if algorithm else cfg.verify.algorithm
+    if use_algorithm not in ("sha256", "quick"):
+        console.print(f"[red]Error:[/red] Invalid algorithm: {use_algorithm}")
+        console.print("Use 'sha256' or 'quick'.")
+        raise typer.Exit(1)
+    
+    # Handle --reconstruct mode: verify without a run record
+    if reconstruct:
+        if not source or not destination:
+            console.print("[red]Error:[/red] --reconstruct requires both --source and --destination")
+            raise typer.Exit(1)
+        
+        source = source.resolve()
+        destination = destination.resolve()
+        
+        if not source.exists():
+            console.print(f"[red]Error:[/red] Source directory not found: {source}")
+            raise typer.Exit(1)
+        
+        if not destination.exists():
+            console.print(f"[red]Error:[/red] Destination directory not found: {destination}")
+            raise typer.Exit(1)
+        
+        console.print("[bold blue]Verification (reconstruct mode)[/bold blue]")
+        console.print()
+        console.print(f"[dim]Source:[/dim]      {source}")
+        console.print(f"[dim]Destination:[/dim] {destination}")
+        console.print(f"[dim]Algorithm:[/dim]   {use_algorithm}")
+        console.print()
+        
+        # Import verification models
+        from datetime import datetime
+        from chronoclean.core.verification import (
+            InputSource,
+            VerificationReport,
+            generate_verify_id,
+        )
+        
+        # Build expected mappings using the SAME pipeline as apply:
+        # 1. Create components from config (FolderTagger, ExifReader, VideoReader, DateEngine)
+        # 2. Use Scanner to scan files with date inference and folder tag extraction
+        # 3. Use Sorter to compute destination folders
+        # 4. Use Renamer/ConflictResolver if renaming/tagging enabled
+        
+        console.print("[dim]Scanning source directory...[/dim]")
+        
+        # Create components from config (same as apply)
+        folder_tagger = FolderTagger(
+            ignore_list=cfg.folder_tags.ignore_list,
+            force_list=cfg.folder_tags.force_list,
+            min_length=cfg.folder_tags.min_length,
+            max_length=cfg.folder_tags.max_length,
+            distance_threshold=cfg.folder_tags.distance_threshold,
+        )
+        
+        exif_reader = ExifReader(skip_errors=cfg.scan.skip_exif_errors)
+        
+        video_reader = VideoMetadataReader(
+            provider=cfg.video_metadata.provider,
+            ffprobe_path=cfg.video_metadata.ffprobe_path,
+            fallback_to_hachoir=cfg.video_metadata.fallback_to_hachoir,
+            skip_errors=cfg.video_metadata.skip_errors,
+        ) if cfg.video_metadata.enabled else None
+        
+        date_engine = DateInferenceEngine(
+            priority=_build_date_priority(cfg),
+            year_cutoff=cfg.filename_date.year_cutoff,
+            filename_date_enabled=cfg.filename_date.enabled,
+            exif_reader=exif_reader,
+            video_reader=video_reader,
+            video_metadata_enabled=cfg.video_metadata.enabled,
+        )
+        
+        # Create scanner with same options as apply
+        scanner = Scanner(
+            date_engine=date_engine,
+            folder_tagger=folder_tagger,
+            image_extensions=set(cfg.scan.image_extensions),
+            video_extensions=set(cfg.scan.video_extensions),
+            raw_extensions=set(cfg.scan.raw_extensions),
+            recursive=cfg.general.recursive,
+            include_videos=cfg.general.include_videos,
+            ignore_hidden=cfg.general.ignore_hidden_files,
+            date_mismatch_enabled=cfg.date_mismatch.enabled,
+            date_mismatch_threshold_days=cfg.date_mismatch.threshold_days,
+        )
+        
+        scan_result = scanner.scan(source, limit=cfg.scan.limit)
+        
+        if not scan_result.files:
+            console.print("[yellow]No files found in source directory[/yellow]")
+            raise typer.Exit(0)
+        
+        console.print(f"[dim]Found {len(scan_result.files)} files[/dim]")
+        
+        # Build sorter and renamer (same as apply)
+        sorter = Sorter(destination, folder_structure=cfg.sorting.folder_structure)
+        
+        use_rename = cfg.renaming.enabled
+        use_tag_names = cfg.folder_tags.enabled
+        
+        renamer = None
+        conflict_resolver = None
+        if use_rename:
+            renamer = Renamer(
+                pattern=cfg.renaming.pattern,
+                date_format=cfg.renaming.date_format,
+                time_format=cfg.renaming.time_format,
+                tag_format=cfg.renaming.tag_part_format,
+                lowercase_ext=cfg.renaming.lowercase_extensions,
+            )
+            conflict_resolver = ConflictResolver(renamer)
+        
+        # Build expected mappings: [(source_path, expected_dest_path)]
+        # Skip files without dates (same as apply - they were never copied)
+        expected_mappings: list[tuple[Path, Path]] = []
+        skipped_no_date = 0
+        
+        for record in scan_result.files:
+            if not record.detected_date:
+                # No date detected - skip (same as apply behavior)
+                skipped_no_date += 1
+                continue
+            
+            # Compute destination folder (same as apply)
+            dest_folder = sorter.compute_destination_folder(record.detected_date)
+            
+            # Determine filename (same logic as apply)
+            new_filename = None
+            if use_rename and renamer and conflict_resolver:
+                tag = record.folder_tag if use_tag_names and record.folder_tag_usable else None
+                new_filename = conflict_resolver.resolve(
+                    record.source_path,
+                    record.detected_date,
+                    tag=tag,
+                )
+            elif use_tag_names and record.folder_tag_usable and record.folder_tag:
+                if not renamer:
+                    renamer = Renamer(lowercase_ext=cfg.renaming.lowercase_extensions)
+                new_filename = renamer.generate_filename_tag_only(
+                    record.source_path,
+                    record.folder_tag,
+                )
+            else:
+                new_filename = record.source_path.name
+            
+            expected_dest = dest_folder / new_filename
+            expected_mappings.append((record.source_path, expected_dest))
+        
+        if skipped_no_date > 0:
+            console.print(f"[dim]Skipped {skipped_no_date} files without dates[/dim]")
+        
+        if not expected_mappings:
+            console.print("[yellow]No files with dates to verify[/yellow]")
+            raise typer.Exit(0)
+        
+        # Create verifier
+        verifier = Verifier(
+            algorithm=use_algorithm,
+            content_search_on_reconstruct=cfg.verify.content_search_on_reconstruct,
+        )
+        
+        # Create verification report
+        verify_id = generate_verify_id()
+        report = VerificationReport(
+            verify_id=verify_id,
+            created_at=datetime.now(),
+            source_root=str(source),
+            destination_root=str(destination),
+            input_source=InputSource.RECONSTRUCTED,
+            run_id=None,
+            hash_algorithm=use_algorithm,
+        )
+        
+        start_time = time.time()
+        total_files = len(expected_mappings)
+        
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            console=console,
+        ) as progress:
+            task = progress.add_task("Verifying...", total=total_files)
+            
+            for i, (source_path, expected_dest) in enumerate(expected_mappings):
+                # Verify using content search if enabled
+                entry = verifier.verify_with_content_search(
+                    source_path,
+                    expected_dest,
+                    destination,
+                )
+                report.add_entry(entry)
+                
+                progress.update(task, advance=1, description=f"Verifying ({i+1}/{total_files})...")
+        
+        duration = time.time() - start_time
+        report.duration_seconds = duration
+        
+        # Save verification report
+        verifications_dir = ensure_verifications_dir(cfg.verify)
+        report_filename = get_verification_filename(verify_id)
+        report_path = verifications_dir / report_filename
+        report_path.write_text(report.to_json(), encoding="utf-8")
+        
+        # Display results
+        console.print()
+        console.print("[bold]Verification Results (reconstructed)[/bold]")
+        console.print()
+        
+        summary = report.summary
+        console.print(f"  Total files:         {summary.total}")
+        console.print(f"  [green]OK:[/green]                 {summary.ok}")
+        if summary.ok_existing_duplicate > 0:
+            console.print(f"  [green]OK (duplicate):[/green]    {summary.ok_existing_duplicate}")
+        if summary.mismatch > 0:
+            console.print(f"  [red]Mismatch:[/red]          {summary.mismatch}")
+        if summary.missing_destination > 0:
+            console.print(f"  [yellow]Missing dest:[/yellow]      {summary.missing_destination}")
+        if summary.missing_source > 0:
+            console.print(f"  [yellow]Missing source:[/yellow]    {summary.missing_source}")
+        if summary.error > 0:
+            console.print(f"  [red]Errors:[/red]            {summary.error}")
+        
+        console.print()
+        console.print(f"[dim]Duration: {duration:.1f}s[/dim]")
+        console.print(f"[dim]Report saved to: {report_path}[/dim]")
+        
+        if summary.ok + summary.ok_existing_duplicate == summary.total:
+            console.print()
+            console.print("[green]✓ All files verified OK![/green]")
+        
+        raise typer.Exit(0)
+    
+    # Find the run record (non-reconstruct mode)
+    run_record = None
+    run_record_path = None
+    
+    if run_file:
+        # Explicit file path
+        run_file = run_file.resolve()
+        if not run_file.exists():
+            console.print(f"[red]Error:[/red] Run file not found: {run_file}")
+            raise typer.Exit(1)
+        
+        try:
+            run_record = load_run_record(run_file)
+            run_record_path = run_file
+        except Exception as e:
+            console.print(f"[red]Error:[/red] Could not load run file: {e}")
+            raise typer.Exit(1)
+    
+    elif run_id:
+        # Find by run ID
+        found_path = find_run_by_id(cfg.verify, run_id)
+        if not found_path:
+            console.print(f"[red]Error:[/red] Run ID not found: {run_id}")
+            raise typer.Exit(1)
+        
+        run_record = load_run_record(found_path)
+        run_record_path = found_path
+    
+    else:
+        # Auto-discover
+        runs = discover_run_records(
+            cfg.verify,
+            source_filter=source,
+            destination_filter=destination,
+            include_dry_runs=include_dry_runs,
+        )
+        
+        if not runs:
+            console.print("[yellow]No apply runs found in .chronoclean/runs/[/yellow]")
+            console.print()
+            console.print("Options:")
+            console.print("  • Run 'apply' to create a run record")
+            console.print("  • Use --run-file to specify a run record directly")
+            console.print("  • Use --reconstruct with --source and --destination")
+            console.print("  • Use --include-dry-runs to include dry-run records")
+            raise typer.Exit(1)
+        
+        if last or yes:
+            # Use most recent
+            selected = runs[0]
+            if yes and len(runs) > 1:
+                # Check for ambiguity when using --yes
+                console.print(f"[yellow]Warning:[/yellow] {len(runs)} runs found, using most recent")
+            run_record = load_run_record(selected.filepath)
+            run_record_path = selected.filepath
+        else:
+            # Interactive selection
+            if len(runs) == 1:
+                selected = runs[0]
+                console.print(f"Last apply run: [cyan]{selected.age_description}[/cyan], "
+                            f"{selected.total_files} files {selected.mode_description}d")
+                console.print(f"  Source: {selected.source_root}")
+                console.print(f"  Destination: {selected.destination_root}")
+                console.print()
+                
+                confirm = typer.confirm("Use this run?", default=True)
+                if not confirm:
+                    raise typer.Exit(0)
+                
+                run_record = load_run_record(selected.filepath)
+                run_record_path = selected.filepath
+            else:
+                # Show list and ask to select
+                console.print(f"[blue]Found {len(runs)} apply runs:[/blue]")
+                console.print()
+                
+                for i, run in enumerate(runs[:10], 1):
+                    dry_marker = " [dim](dry-run)[/dim]" if run.is_dry_run else ""
+                    console.print(f"  {i}. {run.age_description}, {run.total_files} files {run.mode_description}d{dry_marker}")
+                    console.print(f"     {run.source_root} → {run.destination_root}")
+                
+                if len(runs) > 10:
+                    console.print(f"  ... and {len(runs) - 10} more")
+                
+                console.print()
+                choice = typer.prompt("Select run number (or 0 to cancel)", default="1")
+                
+                try:
+                    choice_num = int(choice)
+                    if choice_num == 0:
+                        raise typer.Exit(0)
+                    if choice_num < 1 or choice_num > len(runs):
+                        console.print("[red]Invalid selection[/red]")
+                        raise typer.Exit(1)
+                    
+                    selected = runs[choice_num - 1]
+                    run_record = load_run_record(selected.filepath)
+                    run_record_path = selected.filepath
+                except ValueError:
+                    console.print("[red]Invalid input[/red]")
+                    raise typer.Exit(1)
+    
+    # Display verification info
+    console.print()
+    console.print(f"[blue]Verifying run:[/blue] {run_record.run_id}")
+    console.print(f"  Source: {run_record.source_root}")
+    console.print(f"  Destination: {run_record.destination_root}")
+    console.print(f"  Algorithm: {use_algorithm}")
+    console.print()
+    
+    verifiable = run_record.verifiable_entries
+    if not verifiable:
+        console.print("[yellow]No verifiable entries found (no copy operations)[/yellow]")
+        if run_record.move_entries:
+            console.print(f"[dim]({len(run_record.move_entries)} move operations - sources no longer exist)[/dim]")
+        raise typer.Exit(0)
+    
+    console.print(f"Files to verify: {len(verifiable)}")
+    console.print()
+    
+    # Create verifier
+    verifier = Verifier(
+        algorithm=use_algorithm,
+        content_search_on_reconstruct=cfg.verify.content_search_on_reconstruct,
+    )
+    
+    # Run verification with progress
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        console=console,
+    ) as progress:
+        task = progress.add_task("Verifying files...", total=len(verifiable))
+        
+        def update_progress(current, total):
+            progress.update(task, completed=current, description=f"Verifying files ({current}/{total})...")
+        
+        report = verifier.verify_from_run_record(run_record, progress_callback=update_progress)
+    
+    # Save verification report
+    verifications_dir = ensure_verifications_dir(cfg.verify)
+    report_filename = get_verification_filename(report.verify_id)
+    report_path = verifications_dir / report_filename
+    report_path.write_text(report.to_json(pretty=True), encoding="utf-8")
+    
+    # Display results
+    console.print()
+    console.print("[bold]Verification Results:[/bold]")
+    console.print(f"  ✅ OK: {report.summary.ok}")
+    if report.summary.ok_existing_duplicate:
+        console.print(f"  ✅ OK (existing duplicate): {report.summary.ok_existing_duplicate}")
+    if report.summary.mismatch:
+        console.print(f"  ❌ Mismatch: {report.summary.mismatch}")
+    if report.summary.missing_destination:
+        console.print(f"  ⚠️  Missing destination: {report.summary.missing_destination}")
+    if report.summary.missing_source:
+        console.print(f"  ⚠️  Missing source: {report.summary.missing_source}")
+    if report.summary.error:
+        console.print(f"  ❗ Errors: {report.summary.error}")
+    if report.summary.skipped:
+        console.print(f"  ⏭️  Skipped: {report.summary.skipped}")
+    
+    console.print()
+    console.print(f"Duration: {report.duration_seconds:.1f}s")
+    console.print(f"Report: {report_path}")
+    
+    # Show cleanup hint if there are OK entries
+    if report.summary.cleanup_eligible_count > 0:
+        console.print()
+        console.print(f"[green]{report.summary.cleanup_eligible_count} files eligible for cleanup.[/green]")
+        console.print("Run 'chronoclean cleanup --only ok' to delete verified sources.")
+
+
+# ============================================================================
+# CLEANUP COMMAND (v0.3.1)
+# ============================================================================
+
+
+@app.command()
+def cleanup(
+    verify_file: Optional[Path] = typer.Option(
+        None, "--verify-file", "-v",
+        help="Path to a specific verification report file",
+    ),
+    verify_id: Optional[str] = typer.Option(
+        None, "--verify-id",
+        help="Verification ID to use",
+    ),
+    last: bool = typer.Option(
+        False, "--last",
+        help="Use the most recent matching verification (no prompt)",
+    ),
+    yes: bool = typer.Option(
+        False, "--yes", "-y",
+        help="Auto-accept best match (fail if ambiguous)",
+    ),
+    only: str = typer.Option(
+        "ok", "--only",
+        help="Filter: 'ok' (verified files only)",
+    ),
+    dry_run: Optional[bool] = typer.Option(
+        None, "--dry-run/--no-dry-run",
+        help="Simulate without deleting",
+        show_default=_bool_show_default(_default_cfg.general.dry_run_default, "dry-run", "no-dry-run"),
+    ),
+    force: bool = typer.Option(
+        False, "--force", "-f",
+        help="Skip confirmation prompt",
+    ),
+    source: Optional[Path] = typer.Option(
+        None, "--source", "-s",
+        help="Filter reports by source directory",
+    ),
+    destination: Optional[Path] = typer.Option(
+        None, "--destination", "-d",
+        help="Filter reports by destination directory",
+    ),
+    config: Optional[Path] = typer.Option(
+        None, "--config", "-c",
+        help="Config file path",
+    ),
+):
+    """
+    Delete verified source files (safe cleanup).
+    
+    Deletes source files from a previous verification where status is OK.
+    Only files verified with SHA-256 are eligible for cleanup by default.
+    
+    Examples:
+        chronoclean cleanup --only ok --dry-run     # Preview what would be deleted
+        chronoclean cleanup --only ok --no-dry-run  # Actually delete files
+        chronoclean cleanup --last --no-dry-run -f  # Delete without prompts
+    """
+    from rich.progress import Progress, SpinnerColumn, TextColumn
+    
+    # Validate --only filter
+    if only != "ok":
+        console.print(f"[red]Error:[/red] Only 'ok' filter is supported for cleanup")
+        console.print("Other statuses are for reporting/inspection, not deletion.")
+        raise typer.Exit(1)
+    
+    # Load configuration
+    cfg = ConfigLoader.load(config)
+    
+    # Resolve dry_run
+    use_dry_run = _resolve_bool(dry_run, cfg.general.dry_run_default)
+    
+    # Find the verification report
+    report = None
+    report_path = None
+    
+    if verify_file:
+        # Explicit file path
+        verify_file = verify_file.resolve()
+        if not verify_file.exists():
+            console.print(f"[red]Error:[/red] Verification file not found: {verify_file}")
+            raise typer.Exit(1)
+        
+        try:
+            report = load_verification_report(verify_file)
+            report_path = verify_file
+        except Exception as e:
+            console.print(f"[red]Error:[/red] Could not load verification file: {e}")
+            raise typer.Exit(1)
+    
+    elif verify_id:
+        # Find by verification ID
+        found_path = find_verification_by_id(cfg.verify, verify_id)
+        if not found_path:
+            console.print(f"[red]Error:[/red] Verification ID not found: {verify_id}")
+            raise typer.Exit(1)
+        
+        report = load_verification_report(found_path)
+        report_path = found_path
+    
+    else:
+        # Auto-discover
+        verifications = discover_verification_reports(
+            cfg.verify,
+            source_filter=source,
+            destination_filter=destination,
+        )
+        
+        if not verifications:
+            console.print("[yellow]No verification reports found in .chronoclean/verifications/[/yellow]")
+            console.print()
+            console.print("Run 'chronoclean verify' first to verify copy operations.")
+            raise typer.Exit(1)
+        
+        if last or yes:
+            # Use most recent
+            selected = verifications[0]
+            if yes and len(verifications) > 1:
+                console.print(f"[yellow]Warning:[/yellow] {len(verifications)} reports found, using most recent")
+            report = load_verification_report(selected.filepath)
+            report_path = selected.filepath
+        else:
+            # Interactive selection
+            if len(verifications) == 1:
+                selected = verifications[0]
+                console.print(f"Last verification: [cyan]{selected.age_description}[/cyan]")
+                console.print(f"  ✅ OK: {selected.ok_count + selected.ok_duplicate_count}, "
+                            f"❌ Issues: {selected.mismatch_count + selected.missing_count}")
+                console.print(f"  Source: {selected.source_root}")
+                console.print(f"  Destination: {selected.destination_root}")
+                console.print()
+                
+                confirm = typer.confirm("Use this verification?", default=True)
+                if not confirm:
+                    raise typer.Exit(0)
+                
+                report = load_verification_report(selected.filepath)
+                report_path = selected.filepath
+            else:
+                # Show list and ask to select
+                console.print(f"[blue]Found {len(verifications)} verification reports:[/blue]")
+                console.print()
+                
+                for i, v in enumerate(verifications[:10], 1):
+                    console.print(f"  {i}. {v.age_description}, ✅ {v.cleanup_eligible_count} OK / {v.total} total")
+                    console.print(f"     {v.source_root}")
+                
+                if len(verifications) > 10:
+                    console.print(f"  ... and {len(verifications) - 10} more")
+                
+                console.print()
+                choice = typer.prompt("Select verification number (or 0 to cancel)", default="1")
+                
+                try:
+                    choice_num = int(choice)
+                    if choice_num == 0:
+                        raise typer.Exit(0)
+                    if choice_num < 1 or choice_num > len(verifications):
+                        console.print("[red]Invalid selection[/red]")
+                        raise typer.Exit(1)
+                    
+                    selected = verifications[choice_num - 1]
+                    report = load_verification_report(selected.filepath)
+                    report_path = selected.filepath
+                except ValueError:
+                    console.print("[red]Invalid input[/red]")
+                    raise typer.Exit(1)
+    
+    # Create cleaner
+    cleaner = Cleaner(
+        dry_run=use_dry_run,
+        require_sha256=not cfg.verify.allow_cleanup_on_quick,
+    )
+    
+    # Get eligible files
+    eligible = cleaner.get_cleanup_eligible(report)
+    
+    if not eligible:
+        console.print("[yellow]No files eligible for cleanup.[/yellow]")
+        console.print()
+        console.print("Reasons:")
+        console.print(f"  • OK entries: {report.summary.ok + report.summary.ok_existing_duplicate}")
+        console.print(f"  • Mismatch/missing: {report.summary.mismatch + report.summary.missing_destination + report.summary.missing_source}")
+        if report.hash_algorithm != "sha256":
+            console.print(f"  • Algorithm: {report.hash_algorithm} (sha256 required for cleanup)")
+        raise typer.Exit(0)
+    
+    # Display cleanup info
+    mode_text = "[yellow]DRY RUN[/yellow]" if use_dry_run else "[red]LIVE DELETE[/red]"
+    console.print()
+    console.print(f"[blue]Cleanup from verification:[/blue] {report.verify_id}")
+    console.print(f"Mode: {mode_text}")
+    console.print(f"Files eligible for deletion: {len(eligible)}")
+    console.print()
+    
+    # Confirmation for live mode
+    if not use_dry_run and not force:
+        console.print("[bold red]WARNING: This will permanently delete source files![/bold red]")
+        console.print("These files have been verified as successfully copied to the destination.")
+        console.print()
+        
+        confirm = typer.confirm(f"Delete {len(eligible)} source files?", default=False)
+        if not confirm:
+            console.print("Aborted.")
+            raise typer.Exit(0)
+    
+    # Execute cleanup with progress
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        console=console,
+    ) as progress:
+        task = progress.add_task("Cleaning up...", total=len(eligible))
+        
+        def update_progress(current, total):
+            progress.update(task, completed=current, description=f"Deleting files ({current}/{total})...")
+        
+        result = cleaner.cleanup(report, progress_callback=update_progress)
+    
+    # Display results
+    console.print()
+    if use_dry_run:
+        console.print("[bold yellow]Dry Run Results:[/bold yellow]")
+        console.print(f"  Would delete: {result.deleted} files")
+        console.print(f"  Would free: {format_bytes(result.bytes_freed)}")
+        console.print()
+        console.print("Run with --no-dry-run to actually delete files.")
+    else:
+        console.print("[bold green]Cleanup Complete![/bold green]")
+        console.print(f"  Deleted: {result.deleted} files")
+        console.print(f"  Freed: {format_bytes(result.bytes_freed)}")
+        if result.skipped:
+            console.print(f"  [yellow]Skipped: {result.skipped}[/yellow]")
+        if result.failed:
+            console.print(f"  [red]Failed: {result.failed}[/red]")
+            for path, error in result.failed_paths[:5]:
+                console.print(f"    • {path.name}: {error}")
 
 
 @app.command()

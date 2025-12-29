@@ -1,6 +1,6 @@
 # ChronoClean
 
-![Status](https://img.shields.io/badge/status-v0.3_prototype-blue)
+![Status](https://img.shields.io/badge/status-v0.3.1_prototype-blue)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Platform](https://img.shields.io/badge/platform-SynologyNAS-lightgrey)
@@ -204,22 +204,22 @@ Optional (info-only):
 python -m chronoclean scan D:\photos\incoming
 ```
 
-### Safe archival (copy + verify + optional cleanup) (planned v0.3.1)
+### Safe archival (copy + verify + optional cleanup)
 Use when you want cryptographic confirmation before deleting sources:
 
 ```bash
 python -m chronoclean apply D:\photos\incoming D:\photos\archive --no-dry-run
-python -m chronoclean verify --source D:\photos\incoming --destination D:\photos\archive -o verify.json
-python -m chronoclean cleanup --source D:\photos\incoming --destination D:\photos\archive --only ok --dry-run
-python -m chronoclean cleanup --source D:\photos\incoming --destination D:\photos\archive --only ok --no-dry-run
+python -m chronoclean verify --last
+python -m chronoclean cleanup --only ok --dry-run
+python -m chronoclean cleanup --only ok --no-dry-run
 ```
 
-### Recovery (you forgot the apply report) (planned v0.3.1)
+### Recovery (you forgot the apply report)
 Use when you copied files but did not keep a run report:
 
 ```bash
-python -m chronoclean verify --source D:\photos\incoming --destination D:\photos\archive --reconstruct -o verify.json
-python -m chronoclean cleanup --source D:\photos\incoming --destination D:\photos\archive --only ok --no-dry-run
+python -m chronoclean verify --source D:\photos\incoming --destination D:\photos\archive --reconstruct
+python -m chronoclean cleanup --only ok --no-dry-run
 ```
 
 ## High-Level Structure (indicative)
@@ -384,11 +384,13 @@ ChronoClean development follows a phased approach from prototype to production-r
 - ✅ Decouple tagging from date renaming; allow tag-only filenames (append tags even when `--rename` is off)
 - Deferred to future: Optional heuristics for "no metadata" cases (config placeholder added)
 
-### v0.3.1 - Verification & Safe Cleanup
-- Planned: Apply run report (capture `source -> destination` mapping for later verification)
-- Planned: `verify` command (hash-based; default SHA-256) to confirm copy integrity
-- Planned: `cleanup` command to delete only sources verified OK (supports partial cleanup)
-- Planned: Recovery path when the apply report was forgotten (`verify --reconstruct`)
+### v0.3.1 - Verification & Safe Cleanup ✅ Complete
+- ✅ Apply run record (captures `source -> destination` mapping for later verification)
+- ✅ `verify` command (hash-based SHA-256; `--algorithm quick` for size-only)
+- ✅ `cleanup` command to delete only sources verified OK (supports `--only ok`)
+- ✅ Recovery path when the apply report was forgotten (`verify --reconstruct`)
+- ✅ Auto-discovery of recent runs and verification reports with interactive prompts
+- ✅ `--no-run-record` flag for apply when record not needed
 
 ### v0.4 - User Experience & Safety
 - Unambiguous command split:

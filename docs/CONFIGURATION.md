@@ -306,6 +306,59 @@ export:
 > **Note:** `include_folder_tags` is reserved for future use. Currently folder tags
 > are detected but not included in export output.
 
+### `verify` — Verification & Cleanup Settings (v0.3.1)
+
+Control verification of applied changes and safe source cleanup.
+
+```yaml
+verify:
+  enabled: false                        # Master switch (default off)
+  algorithm: "sha256"                   # sha256 (recommended) or quick
+  state_dir: ".chronoclean"             # Where to store run records
+  run_record_dir: "runs"                # Subdirectory for run records
+  verification_dir: "verifications"     # Subdirectory for verification reports
+  allow_cleanup_on_quick: false         # Allow cleanup with quick verification
+  content_search_on_reconstruct: false  # Search by content if expected path missing
+  write_run_record: true                # Write run record on apply
+```
+
+**Algorithm options:**
+| Algorithm | Speed | Safety for Cleanup |
+|-----------|-------|-------------------|
+| `sha256` | Slower (reads full file) | Safe - cryptographic verification |
+| `quick` | Fast (size comparison only) | Not safe - cannot guarantee content match |
+
+**Key settings:**
+
+- **`algorithm`**: Use `sha256` for reliable verification. Use `quick` only for 
+  quick sanity checks when you don't plan to delete source files.
+  
+- **`allow_cleanup_on_quick`**: By default, `cleanup` command refuses to delete
+  files verified with `quick` mode since size-only verification isn't reliable.
+  Set to `true` only if you accept the risk.
+
+- **`content_search_on_reconstruct`**: When verifying without a run record 
+  (reconstructed mapping), enable this to search the destination tree for files
+  matching source content. Useful when file was renamed during apply.
+
+- **`write_run_record`**: Automatically writes a run record after each `apply`.
+  Disable with `--no-run-record` CLI flag if not needed.
+
+**Typical workflow:**
+```bash
+# 1. Apply changes (automatically writes run record)
+chronoclean apply --no-dry-run
+
+# 2. Verify the copy succeeded
+chronoclean verify
+
+# 3. After verification, safely delete verified sources
+chronoclean cleanup --no-dry-run
+```
+
+> **Note:** Run records and verification reports are stored in `.chronoclean/runs/` 
+> and `.chronoclean/verifications/` respectively.
+
 ### `logging` — Logging Settings
 
 ```yaml

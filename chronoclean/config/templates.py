@@ -23,6 +23,10 @@ sorting:
 #   provider: "ffprobe"        # ffprobe (preferred) or hachoir
 #   fallback_to_hachoir: true  # Use hachoir if ffprobe unavailable
 
+# verify:                      # Verification & cleanup settings (v0.3.1)
+#   write_run_record: true     # Write apply run records for later verification
+#   algorithm: "sha256"        # sha256 (safe) or quick (size only)
+
 # filename_date:
 #   enabled: true              # Extract dates from filenames (v0.2)
 #   priority: "after_exif"     # before_exif, after_exif, after_filesystem
@@ -156,6 +160,20 @@ video_metadata:
   ffprobe_path: "ffprobe"     # Path to ffprobe binary
   fallback_to_hachoir: true   # Use hachoir if ffprobe unavailable
   skip_errors: true           # Continue on metadata read failures
+
+# ============================================================================
+# VERIFICATION & CLEANUP SETTINGS (v0.3.1)
+# Post-copy verification and safe source cleanup
+# ============================================================================
+verify:
+  enabled: false              # Verification is opt-in
+  write_run_record: true      # Write apply run records for later verification
+  algorithm: "sha256"         # sha256 (safe) or quick (size only)
+  state_dir: ".chronoclean"   # Directory for run records and verification reports
+  run_record_dir: "runs"      # Subdirectory for apply run records
+  verification_dir: "verifications"  # Subdirectory for verification reports
+  allow_cleanup_on_quick: false      # Require sha256 for cleanup eligibility
+  content_search_on_reconstruct: false  # Search by content when expected path missing
 
 # ============================================================================
 # FILENAME DATE PARSING (v0.2)

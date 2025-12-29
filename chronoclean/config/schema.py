@@ -174,6 +174,20 @@ class ExportConfig:
 
 
 @dataclass
+class VerifyConfig:
+    """Verification and cleanup configuration (v0.3.1)."""
+
+    enabled: bool = False  # Default off; user opts in when needed
+    algorithm: str = "sha256"  # sha256 | quick
+    state_dir: str = ".chronoclean"  # Stored in current working directory
+    run_record_dir: str = "runs"  # Resolved under state_dir
+    verification_dir: str = "verifications"  # Resolved under state_dir
+    allow_cleanup_on_quick: bool = False  # Quick mode not eligible for cleanup by default
+    content_search_on_reconstruct: bool = False  # Search destination tree by content if expected path missing
+    write_run_record: bool = True  # Write run record on apply by default
+
+
+@dataclass
 class DryRunConfig:
     """Dry run display configuration settings."""
 
@@ -233,6 +247,8 @@ class ChronoCleanConfig:
     export: ExportConfig = field(default_factory=ExportConfig)
     # v0.3 additions
     video_metadata: VideoMetadataConfig = field(default_factory=VideoMetadataConfig)
+    # v0.3.1 additions
+    verify: VerifyConfig = field(default_factory=VerifyConfig)
     # Display and system
     dry_run: DryRunConfig = field(default_factory=DryRunConfig)
     logging: LoggingConfig = field(default_factory=LoggingConfig)

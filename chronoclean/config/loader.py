@@ -23,6 +23,7 @@ from chronoclean.config.schema import (
     ScanConfig,
     SortingConfig,
     SynologyConfig,
+    VerifyConfig,
     VideoMetadataConfig,
 )
 
@@ -113,6 +114,8 @@ class ConfigLoader:
             export=cls._build_export(data.get("export", {})),
             # v0.3 additions
             video_metadata=cls._build_video_metadata(data.get("video_metadata", {})),
+            # v0.3.1 additions
+            verify=cls._build_verify(data.get("verify", {})),
             # Display and system
             dry_run=cls._build_dry_run(data.get("dry_run", {})),
             logging=cls._build_logging(data.get("logging", {})),
@@ -311,6 +314,28 @@ class ConfigLoader:
             config.fallback_to_hachoir = bool(data["fallback_to_hachoir"])
         if "skip_errors" in data:
             config.skip_errors = bool(data["skip_errors"])
+        return config
+
+    @classmethod
+    def _build_verify(cls, data: dict[str, Any]) -> VerifyConfig:
+        """Build VerifyConfig from dictionary (v0.3.1)."""
+        config = VerifyConfig()
+        if "enabled" in data:
+            config.enabled = bool(data["enabled"])
+        if "algorithm" in data:
+            config.algorithm = data["algorithm"]
+        if "state_dir" in data:
+            config.state_dir = data["state_dir"]
+        if "run_record_dir" in data:
+            config.run_record_dir = data["run_record_dir"]
+        if "verification_dir" in data:
+            config.verification_dir = data["verification_dir"]
+        if "allow_cleanup_on_quick" in data:
+            config.allow_cleanup_on_quick = bool(data["allow_cleanup_on_quick"])
+        if "content_search_on_reconstruct" in data:
+            config.content_search_on_reconstruct = bool(data["content_search_on_reconstruct"])
+        if "write_run_record" in data:
+            config.write_run_record = bool(data["write_run_record"])
         return config
 
     @classmethod

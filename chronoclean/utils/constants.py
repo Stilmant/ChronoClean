@@ -1,7 +1,7 @@
 """Constants for ChronoClean."""
 
 # Version
-VERSION = "0.1.0"
+VERSION = "0.3.1"
 
 # Default file extensions
 IMAGE_EXTENSIONS = {

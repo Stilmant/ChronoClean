@@ -14,7 +14,7 @@ Key principles:
 - Verification is **opt-in** and can take as long as needed.
 - Cleanup is **never automatic** and must be explicitly requested.
 - Partial cleanup is supported (e.g., “70% verified OK” → delete only those).
-- If a source file cannot be mapped to a destination file, it is **not eligible** for deletion.
+- If a source file cannot be verified as present in the destination (by hash), it is **not eligible** for deletion.
 
 ---
 
@@ -74,6 +74,17 @@ Instead, the CLI should:
 
 Non-interactive modes must exist (`--yes`, `--last`, `--run-id`, etc.).
 
+### Core Storage Principle: `.chronoclean/` is a persistent local history (CWD)
+
+All v0.3.1 artifacts are stored under the **current working directory**:
+
+- `.chronoclean/runs/` stores apply run records (including dry-run)
+- `.chronoclean/verifications/` stores verification reports
+- `.chronoclean/` becomes a durable history of scans/applies/verifications
+- it can evolve into a “lightweight database” over time (future versions)
+
+This supports a workflow where the user always runs ChronoClean from the same “project folder” and accumulates a complete operational history across many runs and many source/destination pairs.
+
 ### A) `apply` writes an Apply Run Record (recommended default)
 
 `apply` writes a run record by default (unless explicitly disabled):
@@ -81,6 +92,8 @@ Non-interactive modes must exist (`--yes`, `--last`, `--run-id`, etc.).
 - Opt-out: `apply --no-run-record`
 
 This provides the best, least ambiguous mapping for later verification.
+
+**Dry-run behavior:** dry-runs also write a run record (`mode: dry_run`). The file naming should make this obvious (e.g., `..._apply_dryrun.json`, or by relying on the `mode` field). The default `verify` UX should propose **live copy** runs first.
 
 ### B) `verify` auto-discovers what to verify
 
@@ -112,9 +125,20 @@ Recovery mode (no run record available):
 chronoclean verify --source <SOURCE> --destination <DESTINATION> --reconstruct
 ```
 
-In reconstruction mode, `verify` conservatively rebuilds the mapping using the same rules as `apply` (structure/rename/tagging/collision strategy), with these safety constraints:
-- If expected destination does not exist: status `missing_destination` (not deletable).
-- If mapping is ambiguous: status `ambiguous` (not deletable).
+In reconstruction mode, `verify` rebuilds the mapping using the same rules as `apply` (structure/rename/tagging/collision strategy), with these safety constraints:
+- If no matching destination content is found: status `missing_destination` (not deletable).
+- If the source file is missing: status `missing_source` (not deletable).
+
+Important decision: if the destination already contains the same content (historical duplicates), this is not considered “ambiguous”.
+If the source hash matches any destination file hash, the source is eligible for cleanup.
+
+Recommended reconstruction strategy (safe, deterministic):
+1. Compute the expected destination path for the source (same rules as apply).
+2. If the expected destination file exists: hash-compare source vs that destination.
+3. If the expected destination file does not exist, optionally search for a destination match by content (gated by `verify.content_search_on_reconstruct`):
+   - restrict candidates by extension and size (fast prefilter)
+   - hash-compare candidates until a match is found
+4. If any destination file matches by hash: mark the entry OK.
 
 ### C) Verification modes
 
@@ -148,9 +172,9 @@ chronoclean cleanup --only ok --no-dry-run
 ```
 
 Cleanup safety rules:
-- Delete only entries where `status == ok` AND destination exists AND verification mode is eligible (default: sha256).
+- Delete only entries where `status` is `ok` or `ok_existing_duplicate`, destination exists, and verification mode is eligible (default: sha256).
 - Never delete entries with status:
-  - `missing_destination`, `mismatch`, `ambiguous`, `error`, `skipped`
+  - `missing_destination`, `mismatch`, `missing_source`, `error`, `skipped`
 - Support partial deletion (only verified OK subset).
 - Default `--dry-run`; require `--no-dry-run` + confirmation (and optionally `--force`).
 
@@ -183,10 +207,12 @@ Top-level:
 ### Verification Report schema (JSON)
 
 Per-entry:
-- `status` (enum: `ok`, `mismatch`, `missing_destination`, `missing_source`, `ambiguous`, `error`, `skipped`)
+- `status` (enum: `ok`, `ok_existing_duplicate`, `mismatch`, `missing_destination`, `missing_source`, `error`, `skipped`)
 - `hash_algorithm` (e.g., `sha256`, `none` for quick)
 - `source_hash` (nullable)
 - `destination_hash` (nullable)
+- `match_type` (enum: `expected_path`, `content_search`, `unknown`), optional but recommended
+- `destination_path` (string, nullable; actual verified destination path if known)
 - `error` (nullable)
 
 Top-level:
@@ -213,9 +239,11 @@ New optional section to provide defaults (CLI still overrides):
 verify:
   enabled: false              # default off; user opts in when needed
   algorithm: "sha256"         # sha256 | quick
-  run_record_dir: ".chronoclean/runs"
-  verification_dir: ".chronoclean/verifications"
+  state_dir: ".chronoclean"   # stored in current working directory by default
+  run_record_dir: "runs"      # resolved under state_dir
+  verification_dir: "verifications"  # resolved under state_dir
   allow_cleanup_on_quick: false
+  content_search_on_reconstruct: false   # planned: search destination tree by content if expected path missing
 ```
 
 ---
@@ -223,6 +251,7 @@ verify:
 ## Implementation Notes
 
 - Hashing should be streamed (avoid loading files into memory).
+- All run records and verification reports should be written under `verify.state_dir` (default: `./.chronoclean` in the current working directory).
 - Verification should be resumable in a future version (out of scope for v0.3.1).
 - When `apply` is run in copy mode, the Apply Run Record should record the final destination path after collision handling.
 - Cleanup should be conservative:
