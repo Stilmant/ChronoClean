@@ -201,3 +201,32 @@ class ExifReader:
             True if the file has EXIF data with a date
         """
         return self.get_date(file_path) is not None
+
+
+def is_exiftool_available() -> bool:
+    """Check if exiftool (PyExifTool) is available.
+    
+    Note: ChronoClean uses exifread by default, which is a pure Python library.
+    This check is for the optional exiftool binary integration.
+    
+    Returns:
+        True if exiftool package is importable
+    """
+    try:
+        import exiftool  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
+def get_exifread_version() -> str:
+    """Get the installed exifread package version.
+    
+    Returns:
+        Version string or 'unknown' if not available
+    """
+    try:
+        import exifread
+        return getattr(exifread, "__version__", "unknown")
+    except ImportError:
+        return "not installed"

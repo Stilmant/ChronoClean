@@ -139,26 +139,26 @@ class TestConfigHelperFunctions:
 
     def test_resolve_bool_cli_overrides_config_true(self):
         """CLI True overrides config False."""
-        from chronoclean.cli.main import _resolve_bool
+        from chronoclean.cli.helpers import resolve_bool
 
-        result = _resolve_bool(True, False)
+        result = resolve_bool(True, False)
         assert result is True
 
     def test_resolve_bool_cli_overrides_config_false(self):
         """CLI False overrides config True."""
-        from chronoclean.cli.main import _resolve_bool
+        from chronoclean.cli.helpers import resolve_bool
 
-        result = _resolve_bool(False, True)
+        result = resolve_bool(False, True)
         assert result is False
 
     def test_resolve_bool_none_uses_config(self):
         """CLI None uses config value."""
-        from chronoclean.cli.main import _resolve_bool
+        from chronoclean.cli.helpers import resolve_bool
 
-        result = _resolve_bool(None, True)
+        result = resolve_bool(None, True)
         assert result is True
 
-        result = _resolve_bool(None, False)
+        result = resolve_bool(None, False)
         assert result is False
 
 

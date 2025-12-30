@@ -1,11 +1,14 @@
 """Main CLI application for ChronoClean."""
 
+import time
 from pathlib import Path
 from typing import Optional
 
 import typer
+import yaml
 from rich.console import Console
 from rich.table import Table
+from rich.progress import Progress, SpinnerColumn, TextColumn
 
 from chronoclean import __version__
 from chronoclean.config import ConfigLoader
@@ -35,6 +38,14 @@ from chronoclean.core.verifier import Verifier, create_verifier_from_config
 from chronoclean.core.verification import get_verification_filename
 from chronoclean.core.cleaner import Cleaner, format_bytes
 from chronoclean.utils.logging import setup_logging
+from chronoclean.cli.helpers import (
+    create_scan_components,
+    validate_source_dir,
+    validate_destination_dir,
+    error_exit,
+    resolve_bool,
+    _build_date_priority,
+)
 
 # Initialize console
 console = Console()
@@ -51,65 +62,7 @@ def _bool_show_default(value: bool, true_word: str, false_word: str) -> str:
     return f"{true_word if value else false_word}{_cfg_note}"
 
 
-def _build_date_priority(cfg: ChronoCleanConfig) -> list[str]:
-    """
-    Build date inference priority list including filename based on config.
-    
-    The filename_date.priority setting determines where "filename" is inserted:
-    - "before_exif": filename checked first
-    - "after_exif": filename checked after exif but before filesystem
-    - "after_filesystem": filename checked after filesystem but before folder_name
-    
-    Args:
-        cfg: ChronoClean configuration
-        
-    Returns:
-        Priority list for DateInferenceEngine
-    """
-    base_priority = list(cfg.sorting.fallback_date_priority)
-    
-    # v0.3: Strip video_metadata if disabled
-    if not cfg.video_metadata.enabled:
-        base_priority = [p for p in base_priority if p != "video_metadata"]
-    
-    # Only add filename to priority if enabled
-    if not cfg.filename_date.enabled:
-        # Strip "filename" if user had it in fallback_date_priority but disabled the feature
-        return [p for p in base_priority if p != "filename"]
-    
-    # Don't add if already present
-    if "filename" in base_priority:
-        return base_priority
-    
-    priority_setting = cfg.filename_date.priority
-    
-    if priority_setting == "before_exif":
-        # Insert at the beginning
-        return ["filename"] + base_priority
-    elif priority_setting == "after_exif":
-        # Insert after exif if present, otherwise at position 1
-        if "exif" in base_priority:
-            idx = base_priority.index("exif") + 1
-            return base_priority[:idx] + ["filename"] + base_priority[idx:]
-        else:
-            return ["filename"] + base_priority
-    elif priority_setting == "after_filesystem":
-        # Insert after filesystem if present
-        if "filesystem" in base_priority:
-            idx = base_priority.index("filesystem") + 1
-            return base_priority[:idx] + ["filename"] + base_priority[idx:]
-        elif "exif" in base_priority:
-            idx = base_priority.index("exif") + 1
-            return base_priority[:idx] + ["filename"] + base_priority[idx:]
-        else:
-            return base_priority + ["filename"]
-    else:
-        # Default: after_exif behavior
-        if "exif" in base_priority:
-            idx = base_priority.index("exif") + 1
-            return base_priority[:idx] + ["filename"] + base_priority[idx:]
-        else:
-            return ["filename"] + base_priority
+# Note: _build_date_priority and resolve_bool are imported from cli.helpers
 
 
 app = typer.Typer(
@@ -149,11 +102,6 @@ def main_callback(
     setup_logging(level=log_level)
 
 
-def _resolve_bool(cli_value: Optional[bool], config_value: bool) -> bool:
-    """Resolve boolean value: CLI overrides config if explicitly set."""
-    return config_value if cli_value is None else cli_value
-
-
 def _show_config_info(cfg: ChronoCleanConfig, config_path: Optional[Path]) -> None:
     """Display config file info if one was loaded."""
     if config_path:
@@ -190,66 +138,21 @@ def scan(
     cfg = ConfigLoader.load(config)
 
     # Resolve options: CLI overrides config
-    use_recursive = _resolve_bool(recursive, cfg.general.recursive)
-    use_videos = _resolve_bool(videos, cfg.general.include_videos)
+    use_recursive = resolve_bool(recursive, cfg.general.recursive)
+    use_videos = resolve_bool(videos, cfg.general.include_videos)
     use_limit = limit if limit is not None else cfg.scan.limit
 
-    # Validate source
-    source = source.resolve()
-    if not source.exists():
-        console.print(f"[red]Error:[/red] Source path not found: {source}")
-        raise typer.Exit(1)
-
-    if not source.is_dir():
-        console.print(f"[red]Error:[/red] Source is not a directory: {source}")
-        raise typer.Exit(1)
+    # Validate source using helper
+    source = validate_source_dir(source, console)
 
     console.print(f"[blue]Scanning:[/blue] {source}")
     if config:
         console.print(f"[dim]Config: {config}[/dim]")
     console.print()
 
-    # Create components from config
-    exif_reader = ExifReader(skip_errors=cfg.scan.skip_exif_errors)
-    
-    # v0.3: Create video metadata reader with config
-    video_reader = VideoMetadataReader(
-        provider=cfg.video_metadata.provider,
-        ffprobe_path=cfg.video_metadata.ffprobe_path,
-        fallback_to_hachoir=cfg.video_metadata.fallback_to_hachoir,
-        skip_errors=cfg.video_metadata.skip_errors,
-    ) if cfg.video_metadata.enabled else None
-    
-    folder_tagger = FolderTagger(
-        ignore_list=cfg.folder_tags.ignore_list,
-        force_list=cfg.folder_tags.force_list,
-        min_length=cfg.folder_tags.min_length,
-        max_length=cfg.folder_tags.max_length,
-        distance_threshold=cfg.folder_tags.distance_threshold,
-    )
-    
-    date_engine = DateInferenceEngine(
-        priority=_build_date_priority(cfg),
-        exif_reader=exif_reader,
-        video_reader=video_reader,
-        year_cutoff=cfg.filename_date.year_cutoff,
-        filename_date_enabled=cfg.filename_date.enabled,
-        video_metadata_enabled=cfg.video_metadata.enabled,
-    )
-
-    # Create scanner with config values
-    scanner = Scanner(
-        date_engine=date_engine,
-        folder_tagger=folder_tagger,
-        image_extensions=set(cfg.scan.image_extensions),
-        video_extensions=set(cfg.scan.video_extensions),
-        raw_extensions=set(cfg.scan.raw_extensions),
-        recursive=use_recursive,
-        include_videos=use_videos,
-        ignore_hidden=cfg.general.ignore_hidden_files,
-        date_mismatch_enabled=cfg.date_mismatch.enabled,
-        date_mismatch_threshold_days=cfg.date_mismatch.threshold_days,
-    )
+    # Create components from config using factory
+    components = create_scan_components(cfg)
+    scanner = components.create_scanner(use_recursive, use_videos)
 
     # Run scan
     with console.status("[bold blue]Scanning files..."):
@@ -402,25 +305,17 @@ def apply(
     cfg = ConfigLoader.load(config)
 
     # Resolve options: CLI overrides config
-    use_dry_run = _resolve_bool(dry_run, cfg.general.dry_run_default)
-    use_rename = _resolve_bool(rename, cfg.renaming.enabled)
-    use_tag_names = _resolve_bool(tag_names, cfg.folder_tags.enabled)
-    use_recursive = _resolve_bool(recursive, cfg.general.recursive)
-    use_videos = _resolve_bool(videos, cfg.general.include_videos)
+    use_dry_run = resolve_bool(dry_run, cfg.general.dry_run_default)
+    use_rename = resolve_bool(rename, cfg.renaming.enabled)
+    use_tag_names = resolve_bool(tag_names, cfg.folder_tags.enabled)
+    use_recursive = resolve_bool(recursive, cfg.general.recursive)
+    use_videos = resolve_bool(videos, cfg.general.include_videos)
     use_structure = structure if structure is not None else cfg.sorting.folder_structure
     use_limit = limit if limit is not None else cfg.scan.limit
 
-    # Validate paths
-    source = source.resolve()
-    destination = destination.resolve()
-
-    if not source.exists():
-        console.print(f"[red]Error:[/red] Source path not found: {source}")
-        raise typer.Exit(1)
-
-    if not source.is_dir():
-        console.print(f"[red]Error:[/red] Source is not a directory: {source}")
-        raise typer.Exit(1)
+    # Validate paths using helpers
+    source = validate_source_dir(source, console)
+    destination = validate_destination_dir(destination, console)
 
     # Show mode
     mode_text = "[yellow]DRY RUN[/yellow]" if use_dry_run else "[red]LIVE MODE[/red]"
@@ -444,48 +339,12 @@ def apply(
             console.print("Aborted.")
             raise typer.Exit(0)
 
-    # Create components from config
-    folder_tagger = FolderTagger(
-        ignore_list=cfg.folder_tags.ignore_list,
-        force_list=cfg.folder_tags.force_list,
-        min_length=cfg.folder_tags.min_length,
-        max_length=cfg.folder_tags.max_length,
-        distance_threshold=cfg.folder_tags.distance_threshold,
-    )
-    
-    exif_reader = ExifReader(skip_errors=cfg.scan.skip_exif_errors)
-    
-    # v0.3: Create video metadata reader with config
-    video_reader = VideoMetadataReader(
-        provider=cfg.video_metadata.provider,
-        ffprobe_path=cfg.video_metadata.ffprobe_path,
-        fallback_to_hachoir=cfg.video_metadata.fallback_to_hachoir,
-        skip_errors=cfg.video_metadata.skip_errors,
-    ) if cfg.video_metadata.enabled else None
-    
-    date_engine = DateInferenceEngine(
-        priority=_build_date_priority(cfg),
-        year_cutoff=cfg.filename_date.year_cutoff,
-        filename_date_enabled=cfg.filename_date.enabled,
-        exif_reader=exif_reader,
-        video_reader=video_reader,
-        video_metadata_enabled=cfg.video_metadata.enabled,
-    )
+    # Create components from config using factory
+    components = create_scan_components(cfg)
 
     # Scan files
     console.print("[blue]Scanning files...[/blue]")
-    scanner = Scanner(
-        date_engine=date_engine,
-        folder_tagger=folder_tagger,
-        image_extensions=set(cfg.scan.image_extensions),
-        video_extensions=set(cfg.scan.video_extensions),
-        raw_extensions=set(cfg.scan.raw_extensions),
-        recursive=use_recursive,
-        include_videos=use_videos,
-        ignore_hidden=cfg.general.ignore_hidden_files,
-        date_mismatch_enabled=cfg.date_mismatch.enabled,
-        date_mismatch_threshold_days=cfg.date_mismatch.threshold_days,
-    )
+    scanner = components.create_scanner(use_recursive, use_videos)
     scan_result = scanner.scan(source, limit=use_limit)
 
     if not scan_result.files:
@@ -904,64 +763,17 @@ def _perform_scan(
     limit: Optional[int] = None,
 ):
     """Perform a scan and return the result. Used by export commands."""
-    from chronoclean.core.models import ScanResult
-    
     # Resolve options: CLI overrides config
-    use_recursive = _resolve_bool(recursive, cfg.general.recursive)
-    use_videos = _resolve_bool(videos, cfg.general.include_videos)
+    use_recursive = resolve_bool(recursive, cfg.general.recursive)
+    use_videos = resolve_bool(videos, cfg.general.include_videos)
     use_limit = limit if limit is not None else cfg.scan.limit
 
-    # Validate source
-    source = source.resolve()
-    if not source.exists():
-        console.print(f"[red]Error:[/red] Source path not found: {source}")
-        raise typer.Exit(1)
+    # Validate source using helper
+    source = validate_source_dir(source, console)
 
-    if not source.is_dir():
-        console.print(f"[red]Error:[/red] Source is not a directory: {source}")
-        raise typer.Exit(1)
-
-    # Create components from config
-    folder_tagger = FolderTagger(
-        ignore_list=cfg.folder_tags.ignore_list,
-        force_list=cfg.folder_tags.force_list,
-        min_length=cfg.folder_tags.min_length,
-        max_length=cfg.folder_tags.max_length,
-        distance_threshold=cfg.folder_tags.distance_threshold,
-    )
-    
-    exif_reader = ExifReader(skip_errors=cfg.scan.skip_exif_errors)
-    
-    # v0.3: Create video metadata reader with config
-    video_reader = VideoMetadataReader(
-        provider=cfg.video_metadata.provider,
-        ffprobe_path=cfg.video_metadata.ffprobe_path,
-        fallback_to_hachoir=cfg.video_metadata.fallback_to_hachoir,
-        skip_errors=cfg.video_metadata.skip_errors,
-    ) if cfg.video_metadata.enabled else None
-    
-    date_engine = DateInferenceEngine(
-        priority=_build_date_priority(cfg),
-        year_cutoff=cfg.filename_date.year_cutoff,
-        filename_date_enabled=cfg.filename_date.enabled,
-        exif_reader=exif_reader,
-        video_reader=video_reader,
-        video_metadata_enabled=cfg.video_metadata.enabled,
-    )
-
-    # Create scanner with config values
-    scanner = Scanner(
-        date_engine=date_engine,
-        folder_tagger=folder_tagger,
-        image_extensions=set(cfg.scan.image_extensions),
-        video_extensions=set(cfg.scan.video_extensions),
-        raw_extensions=set(cfg.scan.raw_extensions),
-        recursive=use_recursive,
-        include_videos=use_videos,
-        ignore_hidden=cfg.general.ignore_hidden_files,
-        date_mismatch_enabled=cfg.date_mismatch.enabled,
-        date_mismatch_threshold_days=cfg.date_mismatch.threshold_days,
-    )
+    # Create components from config using factory
+    components = create_scan_components(cfg)
+    scanner = components.create_scanner(use_recursive, use_videos)
 
     # Run scan
     with console.status("[bold blue]Scanning files..."):
@@ -1177,16 +989,9 @@ def verify(
             console.print("[red]Error:[/red] --reconstruct requires both --source and --destination")
             raise typer.Exit(1)
         
-        source = source.resolve()
-        destination = destination.resolve()
-        
-        if not source.exists():
-            console.print(f"[red]Error:[/red] Source directory not found: {source}")
-            raise typer.Exit(1)
-        
-        if not destination.exists():
-            console.print(f"[red]Error:[/red] Destination directory not found: {destination}")
-            raise typer.Exit(1)
+        # Validate paths using helpers
+        source = validate_source_dir(source, console)
+        destination = validate_source_dir(destination, console)  # Destination must exist for reconstruct
         
         console.print("[bold blue]Verification (reconstruct mode)[/bold blue]")
         console.print()
@@ -1211,46 +1016,9 @@ def verify(
         
         console.print("[dim]Scanning source directory...[/dim]")
         
-        # Create components from config (same as apply)
-        folder_tagger = FolderTagger(
-            ignore_list=cfg.folder_tags.ignore_list,
-            force_list=cfg.folder_tags.force_list,
-            min_length=cfg.folder_tags.min_length,
-            max_length=cfg.folder_tags.max_length,
-            distance_threshold=cfg.folder_tags.distance_threshold,
-        )
-        
-        exif_reader = ExifReader(skip_errors=cfg.scan.skip_exif_errors)
-        
-        video_reader = VideoMetadataReader(
-            provider=cfg.video_metadata.provider,
-            ffprobe_path=cfg.video_metadata.ffprobe_path,
-            fallback_to_hachoir=cfg.video_metadata.fallback_to_hachoir,
-            skip_errors=cfg.video_metadata.skip_errors,
-        ) if cfg.video_metadata.enabled else None
-        
-        date_engine = DateInferenceEngine(
-            priority=_build_date_priority(cfg),
-            year_cutoff=cfg.filename_date.year_cutoff,
-            filename_date_enabled=cfg.filename_date.enabled,
-            exif_reader=exif_reader,
-            video_reader=video_reader,
-            video_metadata_enabled=cfg.video_metadata.enabled,
-        )
-        
-        # Create scanner with same options as apply
-        scanner = Scanner(
-            date_engine=date_engine,
-            folder_tagger=folder_tagger,
-            image_extensions=set(cfg.scan.image_extensions),
-            video_extensions=set(cfg.scan.video_extensions),
-            raw_extensions=set(cfg.scan.raw_extensions),
-            recursive=cfg.general.recursive,
-            include_videos=cfg.general.include_videos,
-            ignore_hidden=cfg.general.ignore_hidden_files,
-            date_mismatch_enabled=cfg.date_mismatch.enabled,
-            date_mismatch_threshold_days=cfg.date_mismatch.threshold_days,
-        )
+        # Create components from config using factory
+        components = create_scan_components(cfg)
+        scanner = components.create_scanner(cfg.general.recursive, cfg.general.include_videos)
         
         scan_result = scanner.scan(source, limit=cfg.scan.limit)
         
@@ -1848,8 +1616,348 @@ def cleanup(
                 console.print(f"    • {path.name}: {error}")
 
 
+# ============================================================================
+# DOCTOR COMMAND
+# ============================================================================
+
+
+@app.command()
+def doctor(
+    config: Optional[Path] = typer.Option(
+        None, "--config", "-c",
+        help="Config file path",
+    ),
+    fix: bool = typer.Option(
+        False, "--fix",
+        help="Interactively fix issues found",
+    ),
+):
+    """
+    Check system dependencies and configuration.
+    
+    Diagnoses the environment for potential issues with ffprobe, hachoir,
+    exiftool, and Python package dependencies. Shows which features may
+    be affected by missing dependencies.
+    
+    Use --fix to interactively update configuration for found issues.
+    
+    Examples:
+        chronoclean doctor              # Check all dependencies
+        chronoclean doctor --fix        # Check and offer to fix issues
+    """
+    import shutil
+    import sys
+    
+    from chronoclean.core.video_metadata import (
+        is_ffprobe_available,
+        is_hachoir_available,
+        find_ffprobe_path,
+        get_ffprobe_version,
+        get_hachoir_version,
+    )
+    from chronoclean.core.exif_reader import is_exiftool_available, get_exifread_version
+    
+    # Load configuration
+    cfg = ConfigLoader.load(config)
+    
+    console.print()
+    console.print("[bold blue]ChronoClean Doctor[/bold blue]")
+    console.print(f"[dim]Checking system dependencies...[/dim]")
+    console.print()
+    
+    # Track issues found
+    issues: list[tuple[str, str, str]] = []  # (component, issue, suggestion)
+    fixes_available: list[tuple[str, str, str]] = []  # (component, key, value)
+    
+    # -------------------------------------------------------------------------
+    # External Dependencies Table
+    # -------------------------------------------------------------------------
+    dep_table = Table(title="External Dependencies")
+    dep_table.add_column("Component", style="cyan")
+    dep_table.add_column("Status", style="white")
+    dep_table.add_column("Path / Version", style="dim")
+    dep_table.add_column("Affects", style="yellow")
+    
+    # Check ffprobe
+    configured_ffprobe = cfg.video_metadata.ffprobe_path
+    ffprobe_available = is_ffprobe_available(configured_ffprobe)
+    
+    if ffprobe_available:
+        ffprobe_version = get_ffprobe_version(configured_ffprobe) or "version unknown"
+        ffprobe_path = shutil.which(configured_ffprobe) or configured_ffprobe
+        dep_table.add_row(
+            "ffprobe",
+            "[green]✓ found[/green]",
+            f"{ffprobe_path}\n{ffprobe_version[:60]}..." if len(ffprobe_version) > 60 else f"{ffprobe_path}\n{ffprobe_version}",
+            "video dates",
+        )
+    else:
+        # Try to find ffprobe elsewhere
+        found_path = find_ffprobe_path()
+        if found_path and found_path != configured_ffprobe:
+            dep_table.add_row(
+                "ffprobe",
+                "[yellow]⚠ not at configured path[/yellow]",
+                f"configured: {configured_ffprobe}\nfound at: {found_path}",
+                "video dates",
+            )
+            issues.append((
+                "ffprobe",
+                f"Not found at configured path '{configured_ffprobe}'",
+                f"Found at '{found_path}'. Update config to use this path.",
+            ))
+            fixes_available.append(("ffprobe", "video_metadata.ffprobe_path", found_path))
+        else:
+            dep_table.add_row(
+                "ffprobe",
+                "[red]✗ not found[/red]",
+                f"configured: {configured_ffprobe}",
+                "video dates (will use hachoir fallback)",
+            )
+            issues.append((
+                "ffprobe",
+                "Not found on system",
+                "Install ffmpeg/ffprobe or set video_metadata.ffprobe_path in config.",
+            ))
+    
+    # Check hachoir
+    hachoir_available = is_hachoir_available()
+    if hachoir_available:
+        hachoir_version = get_hachoir_version() or "unknown"
+        dep_table.add_row(
+            "hachoir",
+            "[green]✓ installed[/green]",
+            f"version {hachoir_version}",
+            "video dates (fallback)",
+        )
+    else:
+        fallback_note = "video dates (no fallback)" if not ffprobe_available else "video dates (fallback disabled)"
+        dep_table.add_row(
+            "hachoir",
+            "[yellow]⚠ not installed[/yellow]",
+            "pip install hachoir",
+            fallback_note,
+        )
+        if not ffprobe_available:
+            issues.append((
+                "hachoir",
+                "Not installed (and ffprobe not available)",
+                "Install with: pip install hachoir",
+            ))
+    
+    # Check exiftool (optional)
+    exiftool_available = is_exiftool_available()
+    if exiftool_available:
+        dep_table.add_row(
+            "exiftool",
+            "[green]✓ installed[/green]",
+            "pyexiftool package",
+            "advanced EXIF (optional)",
+        )
+    else:
+        dep_table.add_row(
+            "exiftool",
+            "[dim]○ not installed[/dim]",
+            "pip install pyexiftool",
+            "optional (exifread used)",
+        )
+    
+    console.print(dep_table)
+    console.print()
+    
+    # -------------------------------------------------------------------------
+    # Python Packages Table
+    # -------------------------------------------------------------------------
+    pkg_table = Table(title="Python Packages")
+    pkg_table.add_column("Package", style="cyan")
+    pkg_table.add_column("Status", style="white")
+    pkg_table.add_column("Version", style="dim")
+    pkg_table.add_column("Purpose", style="yellow")
+    
+    # Core packages
+    packages = [
+        ("exifread", "EXIF metadata reading"),
+        ("rich", "Terminal output formatting"),
+        ("typer", "CLI framework"),
+        ("pyyaml", "Configuration parsing"),
+    ]
+    
+    for pkg_name, purpose in packages:
+        try:
+            if pkg_name == "pyyaml":
+                import yaml
+                version = getattr(yaml, "__version__", "unknown")
+            elif pkg_name == "exifread":
+                version = get_exifread_version()
+            else:
+                pkg = __import__(pkg_name)
+                version = getattr(pkg, "__version__", "unknown")
+            pkg_table.add_row(
+                pkg_name,
+                "[green]✓ installed[/green]",
+                version,
+                purpose,
+            )
+        except ImportError:
+            pkg_table.add_row(
+                pkg_name,
+                "[red]✗ missing[/red]",
+                "-",
+                purpose,
+            )
+            issues.append((
+                pkg_name,
+                "Required package not installed",
+                f"Install with: pip install {pkg_name}",
+            ))
+    
+    console.print(pkg_table)
+    console.print()
+    
+    # -------------------------------------------------------------------------
+    # Configuration Status
+    # -------------------------------------------------------------------------
+    config_table = Table(title="Configuration")
+    config_table.add_column("Setting", style="cyan")
+    config_table.add_column("Value", style="white")
+    config_table.add_column("Status", style="dim")
+    
+    # Show active config file
+    active_config = None
+    for search_path in ConfigLoader.DEFAULT_CONFIG_PATHS:
+        if search_path.exists():
+            active_config = search_path
+            break
+    
+    if config:
+        config_table.add_row("Config file", str(config), "[green]specified via --config[/green]")
+    elif active_config:
+        config_table.add_row("Config file", str(active_config), "[green]found[/green]")
+    else:
+        config_table.add_row("Config file", "(none)", "[dim]using defaults[/dim]")
+    
+    # Video metadata settings
+    if cfg.video_metadata.enabled:
+        config_table.add_row("Video metadata", "enabled", "[green]✓[/green]")
+        config_table.add_row("  Provider", cfg.video_metadata.provider, "")
+        config_table.add_row("  ffprobe path", cfg.video_metadata.ffprobe_path, "")
+        config_table.add_row("  Fallback to hachoir", str(cfg.video_metadata.fallback_to_hachoir), "")
+    else:
+        config_table.add_row("Video metadata", "disabled", "[yellow]video dates won't be read[/yellow]")
+    
+    console.print(config_table)
+    console.print()
+    
+    # -------------------------------------------------------------------------
+    # Summary and Issues
+    # -------------------------------------------------------------------------
+    if issues:
+        console.print("[bold yellow]Issues Found:[/bold yellow]")
+        for component, issue, suggestion in issues:
+            console.print(f"  [yellow]•[/yellow] [bold]{component}:[/bold] {issue}")
+            console.print(f"    [dim]→ {suggestion}[/dim]")
+        console.print()
+        
+        # Offer to fix if --fix flag or interactive
+        if fix and fixes_available:
+            console.print("[bold blue]Available Fixes:[/bold blue]")
+            for component, key, value in fixes_available:
+                console.print(f"  • Set [cyan]{key}[/cyan] = [green]{value}[/green]")
+            console.print()
+            
+            if typer.confirm("Apply these fixes to configuration?", default=True):
+                _apply_config_fixes(fixes_available, console)
+        elif fixes_available:
+            console.print("[dim]Run with --fix to interactively apply fixes.[/dim]")
+            console.print()
+    else:
+        console.print("[bold green]✓ All dependencies OK![/bold green]")
+        console.print()
+    
+    # Final status
+    if not ffprobe_available and not hachoir_available:
+        console.print("[red]Warning:[/red] No video metadata provider available.")
+        console.print("Video files will use filesystem dates only.")
+    elif not ffprobe_available and hachoir_available:
+        console.print("[yellow]Note:[/yellow] Using hachoir for video metadata (ffprobe not available).")
+    
+    console.print()
+    console.print(f"[dim]Python {sys.version.split()[0]} | ChronoClean v{__version__}[/dim]")
+
+
+def _apply_config_fixes(
+    fixes: list[tuple[str, str, str]],
+    console: Console,
+) -> None:
+    """Apply configuration fixes by creating/updating config file.
+    
+    Args:
+        fixes: List of (component, key, value) tuples
+        console: Rich console for output
+    """
+    import yaml
+    
+    # Determine config file location
+    config_paths = [
+        Path("chronoclean.yaml"),
+        Path(".chronoclean/config.yaml"),
+    ]
+    
+    existing_config = None
+    for path in config_paths:
+        if path.exists():
+            existing_config = path
+            break
+    
+    if existing_config:
+        console.print(f"[dim]Updating existing config: {existing_config}[/dim]")
+        config_path = existing_config
+        try:
+            with open(config_path, "r", encoding="utf-8") as f:
+                config_data = yaml.safe_load(f) or {}
+        except Exception as e:
+            console.print(f"[red]Error reading config:[/red] {e}")
+            return
+    else:
+        # Ask where to create
+        console.print("No config file found. Where to create?")
+        console.print("  1. chronoclean.yaml (current directory)")
+        console.print("  2. .chronoclean/config.yaml")
+        
+        choice = typer.prompt("Choose", default="1")
+        if choice == "2":
+            config_path = Path(".chronoclean/config.yaml")
+            config_path.parent.mkdir(parents=True, exist_ok=True)
+        else:
+            config_path = Path("chronoclean.yaml")
+        
+        config_data = {}
+    
+    # Apply fixes
+    for component, key, value in fixes:
+        # Parse key like "video_metadata.ffprobe_path" into nested dict
+        parts = key.split(".")
+        current = config_data
+        for part in parts[:-1]:
+            if part not in current:
+                current[part] = {}
+            current = current[part]
+        current[parts[-1]] = value
+        console.print(f"  [green]✓[/green] Set {key} = {value}")
+    
+    # Write config
+    try:
+        with open(config_path, "w", encoding="utf-8") as f:
+            yaml.dump(config_data, f, default_flow_style=False, sort_keys=False)
+        console.print()
+        console.print(f"[green]Config saved to:[/green] {config_path}")
+    except Exception as e:
+        console.print(f"[red]Error writing config:[/red] {e}")
+
+
 @app.command()
 def version():
+
     """Show ChronoClean version."""
     console.print(f"ChronoClean v{__version__}")
 

@@ -1,9 +1,10 @@
 """Duplicate detection via file hashing (v0.2)."""
 
-import hashlib
 import logging
 from pathlib import Path
 from typing import Optional
+
+from chronoclean.core.hashing import compute_file_hash as _compute_file_hash
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +17,7 @@ class DuplicateChecker:
     Can detect duplicates before file operations to avoid unnecessary copies.
     """
 
-    # Chunk size for reading files (4MB)
+    # Chunk size for reading files (4MB) - passed to hashing module
     CHUNK_SIZE = 4 * 1024 * 1024
 
     def __init__(
@@ -63,27 +64,18 @@ class DuplicateChecker:
             logger.warning(f"Not a file: {file_path}")
             return None
 
-        try:
-            if self.algorithm == "md5":
-                hasher = hashlib.md5()
-            else:
-                hasher = hashlib.sha256()
+        # Use centralized hashing function
+        file_hash = _compute_file_hash(
+            file_path,
+            algorithm=self.algorithm,
+            chunk_size=self.CHUNK_SIZE,
+        )
 
-            with open(file_path, "rb") as f:
-                while chunk := f.read(self.CHUNK_SIZE):
-                    hasher.update(chunk)
+        # Cache the result if successful
+        if file_hash is not None and self.cache_enabled:
+            self._hash_cache[resolved_path] = file_hash
 
-            file_hash = hasher.hexdigest()
-
-            # Cache the result
-            if self.cache_enabled:
-                self._hash_cache[resolved_path] = file_hash
-
-            return file_hash
-
-        except OSError as e:
-            logger.error(f"Error reading {file_path}: {e}")
-            return None
+        return file_hash
 
     def are_duplicates(self, file1: Path, file2: Path) -> bool:
         """

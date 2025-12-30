@@ -388,6 +388,64 @@ def is_ffprobe_available(ffprobe_path: str = "ffprobe") -> bool:
     return shutil.which(ffprobe_path) is not None
 
 
+def find_ffprobe_path() -> Optional[str]:
+    """Find ffprobe in common locations.
+    
+    Searches the following locations in order:
+    1. System PATH (default 'ffprobe')
+    2. /opt/bin/ffprobe (Synology DSM)
+    3. /usr/local/bin/ffprobe (macOS Homebrew)
+    4. /usr/bin/ffprobe (Linux system)
+    5. C:\\ffmpeg\\bin\\ffprobe.exe (Windows common)
+    
+    Returns:
+        Path to ffprobe if found, None otherwise
+    """
+    # Common ffprobe locations to probe
+    common_paths = [
+        "ffprobe",  # System PATH
+        "/opt/bin/ffprobe",  # Synology DSM
+        "/usr/local/bin/ffprobe",  # macOS Homebrew
+        "/usr/bin/ffprobe",  # Linux system
+        "C:\\ffmpeg\\bin\\ffprobe.exe",  # Windows
+        "C:\\Program Files\\ffmpeg\\bin\\ffprobe.exe",
+    ]
+    
+    for path in common_paths:
+        if shutil.which(path) is not None:
+            return path
+    
+    return None
+
+
+def get_ffprobe_version(ffprobe_path: str = "ffprobe") -> Optional[str]:
+    """Get the ffprobe version string.
+    
+    Args:
+        ffprobe_path: Path to ffprobe binary
+        
+    Returns:
+        Version string or None if not available
+    """
+    if not is_ffprobe_available(ffprobe_path):
+        return None
+    
+    try:
+        result = subprocess.run(
+            [ffprobe_path, "-version"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if result.returncode == 0:
+            # First line usually contains version: "ffprobe version N.N.N ..."
+            first_line = result.stdout.split("\n")[0]
+            return first_line
+        return None
+    except Exception:
+        return None
+
+
 def is_hachoir_available() -> bool:
     """Check if hachoir package is installed.
     
@@ -399,3 +457,17 @@ def is_hachoir_available() -> bool:
         return True
     except ImportError:
         return False
+
+
+def get_hachoir_version() -> Optional[str]:
+    """Get the installed hachoir package version.
+    
+    Returns:
+        Version string or None if not installed
+    """
+    try:
+        import hachoir
+        return getattr(hachoir, "__version__", "unknown")
+    except ImportError:
+        return None
+

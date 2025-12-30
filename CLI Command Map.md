@@ -1,7 +1,7 @@
 **ChronoClean - CLI Command Map**
 =================================
 
-Note: As of v0.2, the implemented commands are `scan`, `export`, `apply`, `config`, and `version`.
+Note: As of v0.3.1, the implemented commands are `scan`, `export`, `apply`, `verify`, `cleanup`, `config`, `doctor`, and `version`.
 `dryrun`, `tags`, `report`, and `hash` are planned for later phases per the roadmap and are documented here
 as forward-looking commands.
 
@@ -11,6 +11,8 @@ ChronoClean supports a quick workflow today, plus an optional plan-based workflo
 1. **scan** - analyze the library
 2. **export** - export a scan report (JSON/CSV)
 3. **apply** - perform the real operations (defaults to dry-run)
+4. **verify** - verify copy integrity (v0.3.1)
+5. **cleanup** - delete verified source files (v0.3.1)
 
 2) **Plan-based workflow (planned v0.4)**
 1. **report** - analysis outputs (JSON/CSV)
@@ -34,9 +36,12 @@ Available commands:
 - `dryrun` - Simulate operations without touching disk
 - `plan` - Generate an executable plan file (JSON) (planned v0.4)
 - `apply` - Perform actual file moves and renames
+- `verify` - Verify copy integrity using hash comparison (v0.3.1)
+- `cleanup` - Delete verified source files (v0.3.1)
 - `tags` - Manage/inspect folder-tag rules
 - `report` - Show summary reports after scan or apply
 - `config` - Show or edit configuration settings
+- `doctor` - Check system dependencies and configuration (v0.3.1)
 - `hash` - Compute hashes for debugging or tests
 - `version` — Show tool version
 
@@ -300,7 +305,48 @@ Usage:
 
 Shows search paths and marks the active config file.
 
-12. **version**
+12. **doctor** (v0.3.1)
+-----------
+
+Check system dependencies and configuration.
+
+Usage:
+
+`chronoclean doctor`
+`chronoclean doctor --fix`
+
+Options:
+
+- `--config PATH` / `-c PATH` — Specify config file path
+- `--fix` — Interactively fix issues found
+
+Checks:
+
+- **External dependencies:** ffprobe, hachoir, exiftool
+- **Python packages:** exifread, rich, typer, pyyaml
+- **Configuration:** active config file, video metadata settings
+
+If ffprobe is not found at the configured path but found elsewhere (e.g., `/opt/bin/ffprobe` on Synology),
+the `--fix` option will offer to update the configuration file.
+
+Example output:
+
+```
+ChronoClean Doctor
+Checking system dependencies...
+
+┏━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Component ┃ Status    ┃ Path / Version     ┃ Affects               ┃
+┡━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━┩
+│ ffprobe   │ ✓ found   │ /opt/bin/ffprobe   │ video dates           │
+│ hachoir   │ ✓ installed │ version 3.2.0    │ video dates (fallback)│
+│ exiftool  │ ○ not installed │ optional     │ advanced EXIF         │
+└───────────┴───────────┴────────────────────┴───────────────────────┘
+
+✓ All dependencies OK!
+```
+
+13. **version**
 -----------
 
 Show ChronoClean version.
