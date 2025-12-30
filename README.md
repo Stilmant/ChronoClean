@@ -175,7 +175,7 @@ ChronoClean supports two workflows (the second is planned for v0.4).
 2. **Dry run apply** - simulate actions (`apply` defaults to dry-run).
 3. **Apply** - perform sorting, moves, renames, and conflict resolution.
 
-### 2) Plan-based workflow (planned v0.4)
+### 2) Plan-based workflow (planned v0.5)
 This workflow introduces an explicit, reviewable plan file for large/messy imports.
 1. **Scan/report** - generate analysis output for review (JSON/CSV).
 2. **Plan** - generate an executable plan file (JSON) that includes destinations + final names + decisions.
@@ -356,7 +356,10 @@ ChronoClean development follows a phased approach from prototype to production-r
 > 📄 **See [docs/IMPLEMENTATION_SPEC_v0.2.md](docs/IMPLEMENTATION_SPEC_v0.2.md) for v0.2 implementation details.**  
 > 📄 **See [docs/IMPLEMENTATION_SPEC_v0.3.md](docs/IMPLEMENTATION_SPEC_v0.3.md) for v0.3 planning.**  
 > 📄 **See [docs/IMPLEMENTATION_SPEC_v0.3.1.md](docs/IMPLEMENTATION_SPEC_v0.3.1.md) for v0.3.1 planning.**  
-> 📄 **See [docs/IMPLEMENTATION_SPEC_v0.3.2.md](docs/IMPLEMENTATION_SPEC_v0.3.2.md) for v0.3.2 planning.**
+> 📄 **See [docs/IMPLEMENTATION_SPEC_v0.3.2.md](docs/IMPLEMENTATION_SPEC_v0.3.2.md) for v0.3.2 details.**  
+> 📄 **See [docs/IMPLEMENTATION_SPEC_v0.4.md](docs/IMPLEMENTATION_SPEC_v0.4.md) for v0.4 planning.**  
+> 📄 **See [docs/IMPLEMENTATION_SPEC_v0.5.md](docs/IMPLEMENTATION_SPEC_v0.5.md) for v0.5 planning.**  
+> 📄 **See [docs/IMPLEMENTATION_SPEC_v0.6.md](docs/IMPLEMENTATION_SPEC_v0.6.md) for v0.6 planning.**
 
 ### v0.1 – Prototype ✅ Complete
 - ✅ Project structure and configuration system (YAML-based)
@@ -405,7 +408,14 @@ ChronoClean development follows a phased approach from prototype to production-r
 - ✅ CLI helpers refactoring to reduce code duplication
 - ✅ Centralized component factory for scan/apply/verify commands
 
-### v0.4 - User Experience & Safety
+### v0.4 - Robust Apply & Resume
+- Atomic copy (temp file + rename) to avoid partial destination files
+- Persistent apply state on disk (plan + journal) for resume/retry on interruption
+- Resume/detect incomplete runs and continue safely
+- Detailed per-file error recording (not only a summary counter)
+- Streaming execution to keep memory bounded on large libraries
+
+### v0.5 - User Experience & Safety
 - Unambiguous command split:
   - `report` = scan/analysis outputs (JSON/CSV)
   - `plan` = executable plan generation (JSON)
@@ -417,7 +427,7 @@ ChronoClean development follows a phased approach from prototype to production-r
 - Persistent state for tag decisions/overrides (separate from main YAML), plus optional `config set`
 - Safety gates: disk-space check, live-mode warnings, backup reminders, clearer "what will change"
 
-### v0.5 - NAS & Large-Scale Support
+### v0.6 - NAS & Large-Scale Support
 - Implement performance knobs: parallel scan/inference (configurable workers) and memory-efficient iteration
 - Caching (SQLite) for metadata/hash results with invalidation strategy (mtime/size), to speed re-runs
 - Synology DSM notes + headless/Task Scheduler friendly mode and recommended configs

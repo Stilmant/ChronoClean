@@ -1,6 +1,6 @@
-# ChronoClean v0.5 - NAS & Large-Scale Support
+# ChronoClean v0.5 - User Experience & Safety
 
-**Version:** 0.5 (NAS & Large-Scale Support)  
+**Version:** 0.5 (User Experience & Safety)  
 **Status:** Planned  
 **Last Updated:** 2025-12-29
 
@@ -8,9 +8,10 @@
 
 ## Overview
 
-v0.5 focuses on large libraries and NAS environments. It delivers performance
-optimizations (parallel scanning, memory-efficient iteration), metadata caching,
-and headless/task-scheduler friendly workflows suitable for Synology DSM.
+v0.5 focuses on safer and clearer user workflows. It introduces an explicit
+report/plan split, interactive review, and safety gates. It also tracks the
+planned conditional rename mode for "garbage" filenames while keeping renaming
+optional.
 
 ---
 
@@ -18,69 +19,57 @@ and headless/task-scheduler friendly workflows suitable for Synology DSM.
 
 | Goal | Priority | Description |
 |------|----------|-------------|
-| Performance knobs | P0 | Implement parallel scan/inference and streaming iteration |
-| Metadata caching | P0 | SQLite cache for EXIF/metadata/hash results |
-| NAS workflows | P1 | Headless mode, Task Scheduler notes, safe defaults |
-| Large-batch stability | P1 | Bounded memory usage for plans and collisions |
+| Report/plan split | P0 | Clear separation between analysis output and executable plan |
+| Apply from plan | P0 | Deterministic execution of reviewed plans |
+| Interactive review | P1 | Rich-based prompts for risky actions |
+| Safety gates | P1 | Disk-space checks, live-mode warnings, backup reminders |
+| Conditional rename | P2 | Rename only when filenames are low-quality |
 
 ---
 
 ## Key Features
 
-### 1) Performance Knobs (Implemented Config)
+### 1) Unambiguous Command Split
 
-**Purpose:** Make existing config options functional.
+**Purpose:** Make outputs explicit and avoid ambiguity.
 
-**Targets:**
-- `performance.multiprocessing`
-- `performance.max_workers`
-- `performance.chunk_size`
+Planned commands:
+- `report ...` = analysis output (JSON/CSV)
+- `plan ...` = executable plan generation (JSON)
+- `apply --from-plan <plan.json>` = deterministic execution
+- `dryrun --from-plan <plan.json>` = simulate plan without writing
+
+---
+
+### 2) Conditional Rename Mode (Planned)
+
+**Purpose:** Keep original camera filenames while still fixing low-quality names.
 
 **Behavior:**
-- Parallelize scanning and metadata extraction where safe.
-- Keep deterministic output ordering.
+- Renaming becomes an optional *additional* transformation.
+- A new mode allows renaming only when a filename looks low-quality.
 
----
+**Draft config:**
+```yaml
+renaming:
+  mode: "only_if_garbage"   # planned: always, never, only_if_garbage
+```
 
-### 2) Metadata and Hash Caching (SQLite)
+**Garbage detection heuristics (draft):**
+- UUID-like names (e.g., `9A4FDBE4-4237-4789-B514-FAD6E158D937.jpg`)
+- Hash-like names (hex strings, long alphanumeric runs)
+- Generic export names (e.g., `image1234.jpg`, `IMG_E1234.JPG`)
 
-**Purpose:** Avoid recomputing expensive metadata and hashes on re-runs.
-
-**Cache inputs:**
-- EXIF / video metadata timestamps
-- Hash values (SHA256/MD5)
-
-**Invalidation:**
-- Use file size + mtime checks to invalidate stale cache entries.
-
----
-
-### 3) NAS / Headless Workflows
-
-**Purpose:** Ensure predictable runs on Synology and other NAS devices.
-
-**Deliverables:**
-- DSM Task Scheduler examples
-- Headless-friendly logging and exit codes
-- Safe defaults for large batch runs
-
----
-
-### 4) Large-Batch Collision Handling
-
-**Purpose:** Scale duplicate/collision logic to 100k+ files.
-
-**Approach:**
-- Streaming plan generation (avoid full in-memory lists when possible)
-- Bounded caches and configurable limits
+When flagged as garbage, apply the configured rename pattern (date/time/tag).
 
 ---
 
 ## Success Criteria
 
-- Large scans complete within expected time/memory bounds.
-- Cache improves re-run performance without incorrect results.
-- NAS guides cover installation + scheduling end-to-end.
+- Report/plan split is documented and usable.
+- `apply --from-plan` executes a reviewed plan deterministically.
+- Conditional rename mode exists and is opt-in.
+- Safety warnings are clear and prevent accidental destructive runs.
 
 ---
 

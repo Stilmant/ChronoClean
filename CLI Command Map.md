@@ -5,7 +5,7 @@ Note: As of v0.3.2, the implemented commands are `scan`, `export`, `apply`, `ver
 `dryrun`, `tags`, `report`, and `hash` are planned for later phases per the roadmap and are documented here
 as forward-looking commands.
 
-ChronoClean supports a quick workflow today, plus an optional plan-based workflow (planned v0.4):
+ChronoClean supports a quick workflow today, plus an optional plan-based workflow (planned v0.5).
 
 1) **Quick workflow (today)**
 1. **scan** - analyze the library
@@ -14,7 +14,7 @@ ChronoClean supports a quick workflow today, plus an optional plan-based workflo
 4. **verify** - verify copy integrity (v0.3.1)
 5. **cleanup** - delete verified source files (v0.3.1)
 
-2) **Plan-based workflow (planned v0.4)**
+2) **Plan-based workflow (planned v0.5)**
 1. **report** - analysis outputs (JSON/CSV)
 2. **plan** - generate an executable plan (JSON)
 3. **dryrun** - simulate changes from plan
@@ -34,7 +34,7 @@ Available commands:
 - `scan` - Analyze files, read EXIF, infer dates, detect meaningful folders
 - `export` - Export a scan report for review (JSON/CSV) (v0.2)
 - `dryrun` - Simulate operations without touching disk
-- `plan` - Generate an executable plan file (JSON) (planned v0.4)
+- `plan` - Generate an executable plan file (JSON) (planned v0.5)
 - `apply` - Perform actual file moves and renames
 - `verify` - Verify copy integrity using hash comparison (v0.3.1)
 - `cleanup` - Delete verified source files (v0.3.1)
@@ -98,7 +98,7 @@ Output example:
 
 `results.json`, `results.csv`
 
-Planned v0.4: introduce an unambiguous split:
+Planned v0.5: introduce an unambiguous split:
 - `report ...` = analysis outputs (replaces `export` for scan reporting)
 - `plan ...` = executable plan generation (what will be done)
 
@@ -150,7 +150,7 @@ Planned Options:
 - `--preserve-names` - Do not rename files, only move
 - `--conflict-strategy` - Strategy for handling conflicts (use config for now)
 
-5. **plan** (Planned v0.4)
+5. **plan** (Planned v0.5)
 --------
 
 Generate an executable plan file (JSON) for review and deterministic execution.
