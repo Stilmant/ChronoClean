@@ -1,6 +1,6 @@
 # ChronoClean
 
-![Status](https://img.shields.io/badge/status-v0.3.1_prototype-blue)
+![Status](https://img.shields.io/badge/status-v0.3.2_prototype-blue)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Platform](https://img.shields.io/badge/platform-SynologyNAS-lightgrey)
@@ -355,7 +355,8 @@ ChronoClean development follows a phased approach from prototype to production-r
 > 📄 **See [docs/IMPLEMENTATION_SPEC_v0.1.md](docs/IMPLEMENTATION_SPEC_v0.1.md) for v0.1 implementation details.**  
 > 📄 **See [docs/IMPLEMENTATION_SPEC_v0.2.md](docs/IMPLEMENTATION_SPEC_v0.2.md) for v0.2 implementation details.**  
 > 📄 **See [docs/IMPLEMENTATION_SPEC_v0.3.md](docs/IMPLEMENTATION_SPEC_v0.3.md) for v0.3 planning.**  
-> 📄 **See [docs/IMPLEMENTATION_SPEC_v0.3.1.md](docs/IMPLEMENTATION_SPEC_v0.3.1.md) for v0.3.1 planning.**
+> 📄 **See [docs/IMPLEMENTATION_SPEC_v0.3.1.md](docs/IMPLEMENTATION_SPEC_v0.3.1.md) for v0.3.1 planning.**  
+> 📄 **See [docs/IMPLEMENTATION_SPEC_v0.3.2.md](docs/IMPLEMENTATION_SPEC_v0.3.2.md) for v0.3.2 planning.**
 
 ### v0.1 – Prototype ✅ Complete
 - ✅ Project structure and configuration system (YAML-based)
@@ -396,6 +397,13 @@ ChronoClean development follows a phased approach from prototype to production-r
 - ✅ Recovery path when the apply report was forgotten (`verify --reconstruct`)
 - ✅ Auto-discovery of recent runs and verification reports with interactive prompts
 - ✅ `--no-run-record` flag for apply when record not needed
+
+### v0.3.2 - Doctor Command & Code Quality ✅ Complete
+- ✅ `doctor` command to check system dependencies (ffprobe, hachoir, exiftool)
+- ✅ `doctor --fix` to interactively update config with correct paths
+- ✅ Searches common paths including `/opt/bin/ffprobe` (Synology DSM)
+- ✅ CLI helpers refactoring to reduce code duplication
+- ✅ Centralized component factory for scan/apply/verify commands
 
 ### v0.4 - User Experience & Safety
 - Unambiguous command split:
