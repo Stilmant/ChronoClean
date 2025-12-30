@@ -268,40 +268,45 @@ Alternatives may be chosen depending on portability and Synology constraints.
 
 ---
 
+## Development Installation (local)
+
+This section is for local development (tests, linting). On a NAS, follow `docs/SYNOLOGY_INSTALLATION.md`.
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -e ".[dev]"
+```
+
 
 ## Synology NAS Installation (Overview)
-1. Install Python 3 via Package Center  
-2. Upload project folder to the NAS  
-3. Install dependencies:
-```bash
-pip install -e .
-# Or with dev dependencies:
-pip install -e ".[dev]"
-```
-4. Run the tool:
+ChronoClean requires **Python 3.10+**. On many Synology DSM setups, **Package Center** only provides Python up to **3.9**, so the recommended approach is to install a newer Python via **Entware**.
+
+See the dedicated guide: `docs/SYNOLOGY_INSTALLATION.md`.
+
+Quick usage reminder (after install):
+
 ```bash
 # Analyze files
-python3 -m chronoclean scan /volume1/photos
-python3 -m chronoclean scan /volume1/photos --report  # Detailed per-file report
+chronoclean scan /volume1/photos
+chronoclean scan /volume1/photos --report  # Detailed per-file report
 
 # Export scan results (v0.2)
-python3 -m chronoclean export json /volume1/photos -o results.json
-python3 -m chronoclean export csv /volume1/photos -o results.csv
-
-# Planned v0.4: command split
-# - report = analysis outputs (JSON/CSV)
-# - plan = executable plan generation
+chronoclean export json /volume1/photos -o results.json
+chronoclean export csv /volume1/photos -o results.csv
 
 # Organize files (dry-run by default)
-python3 -m chronoclean apply /volume1/unsorted /volume1/photos
+chronoclean apply /volume1/unsorted /volume1/photos
 
 # Apply changes with copy (safe)
-python3 -m chronoclean apply /volume1/unsorted /volume1/photos --no-dry-run
+chronoclean apply /volume1/unsorted /volume1/photos --no-dry-run
 
 # Apply changes with move
-python3 -m chronoclean apply /volume1/unsorted /volume1/photos --no-dry-run --move
+chronoclean apply /volume1/unsorted /volume1/photos --no-dry-run --move
 ```
-5. Optionally schedule via DSM Task Scheduler
+
+Optionally schedule via DSM Task Scheduler.
 
 ---
 
