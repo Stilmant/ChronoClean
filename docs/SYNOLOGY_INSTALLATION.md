@@ -10,6 +10,8 @@ Entware acts as an **isolated userland** on Synology:
 - It does **not** modify DSM system components or Synology packages.
 - For this guide, Entware is the “environment isolation”, so you don’t need (and we don’t use) Python virtual environments.
 
+Entware provides an isolated userland under `/opt`. No Python virtual environment is required.
+
 ## 1) Check your architecture
 
 On the NAS, run:
@@ -55,22 +57,24 @@ Python 3.11+ is fine for this project (it's "3.10+", not "exactly 3.10").
 
 ## 4) (Optional) Install ffprobe for better video metadata
 
-ChronoClean can extract video “taken date” using:
+ChronoClean can extract video "taken date" using:
 - `ffprobe` (preferred, external binary)
 - `hachoir` (pure-Python fallback; optional pip install)
 
-If you want `ffprobe`, install FFmpeg via Entware:
+Install `ffprobe` via Entware:
 
 ```sh
-sudo /opt/bin/opkg install ffmpeg
-ffprobe -version
+sudo /opt/bin/opkg install ffprobe
+/opt/bin/ffprobe -version
 ```
 
-If you cannot/won't install FFmpeg, you can instead install the fallback:
+If you cannot/won't install `ffprobe`, you can instead install the fallback:
 
 ```sh
-/opt/bin/pip3 install --user hachoir
+/opt/bin/pip3 install hachoir
 ```
+
+If ChronoClean doesn't find `ffprobe` automatically on your NAS, set the configured path to `/opt/bin/ffprobe` (see `video_metadata.ffprobe_path` in the config template).
 
 ## 4bis) (Optional) ExifTool (usually not needed)
 
@@ -114,17 +118,43 @@ Install ChronoClean using Entware’s pip, in editable mode, from the cloned rep
 /opt/bin/pip3 install --user -e .
 ```
 
-This is intentionally done **without `sudo`**:
-- `--user` installs ChronoClean into your user’s Python site-packages (still using Entware’s Python, not DSM).
-- Editable mode (`-e`) means the installed package points to your local working tree.
+This is intentionally done **without `sudo`**. Entware is the isolation layer, and editable mode (`-e`) means the installed package points to your local working tree.
 
-Verify:
+Verify (ChronoClean is a CLI exposed via an entry point):
 
 ```sh
-/opt/bin/python3 -m chronoclean --help
+chronoclean --help
+# or, if not on PATH:
+/opt/bin/chronoclean --help
+~/.local/bin/chronoclean --help
 ```
 
-If you prefer the `chronoclean` command, ensure your user-level scripts directory is on your `PATH` (typically `~/.local/bin`).
+## Note: where `pip` installs `chronoclean` on Entware
+
+Entware is an isolated userland under `/opt`, but on some Synology setups the Entware “system” directories (under `/opt`) are not writable by your current user.
+
+In that case, `pip` will still install safely, but it will automatically fall back to your **user environment**:
+
+- Python libs go under `~/.local/...`
+- The executable is placed in `~/.local/bin/chronoclean`
+
+This is expected behavior on Synology+Entware, and you should **not** use `sudo` with `pip`.
+
+To use the `chronoclean` command, do one of the following:
+
+1) Add `~/.local/bin` to your `PATH` (example for BusyBox `sh`):
+
+```sh
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.profile
+```
+
+2) For integrations that need an entry under `/opt/bin` (e.g., a future DSM UI), create a small wrapper or symlink in `/opt/bin` that points to `~/.local/bin/chronoclean` (this may require permissions to write to `/opt/bin`, but still do not use `sudo pip`).
+
+You can check which one you’re using with:
+
+```sh
+command -v chronoclean
+```
 
 ## 7) Updating ChronoClean
 
@@ -173,11 +203,11 @@ mkdir -p /volume1/chrono_test/incoming /volume1/chrono_test/archive
 Put a few copied photos/videos in `/volume1/chrono_test/incoming`, then:
 
 ```sh
-/opt/bin/python3 -m chronoclean apply /volume1/chrono_test/incoming /volume1/chrono_test/archive --dry-run
+chronoclean apply /volume1/chrono_test/incoming /volume1/chrono_test/archive --dry-run
 ```
 
 When you’re confident, run with `--no-dry-run` (ChronoClean defaults to copy mode unless `--move` is specified):
 
 ```sh
-/opt/bin/python3 -m chronoclean apply /volume1/chrono_test/incoming /volume1/chrono_test/archive --no-dry-run
+chronoclean apply /volume1/chrono_test/incoming /volume1/chrono_test/archive --no-dry-run
 ```
