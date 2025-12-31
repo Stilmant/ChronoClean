@@ -1,9 +1,7 @@
 **ChronoClean - CLI Command Map**
 =================================
 
-Note: As of v0.3.2, the implemented commands are `scan`, `export`, `apply`, `verify`, `cleanup`, `config`, `doctor`, and `version`.
-`dryrun`, `tags`, `report`, and `hash` are planned for later phases per the roadmap and are documented here
-as forward-looking commands.
+Note: As of v0.3.3, the implemented commands are `scan`, `export`, `apply`, `verify`, `cleanup`, `config`, `doctor`, and `version`.
 
 ChronoClean supports a quick workflow today, plus an optional plan-based workflow (planned v0.5).
 
@@ -29,21 +27,22 @@ Usage:
 
 `chronoclean [options]`
 
-Available commands:
+**Implemented commands:**
 
 - `scan` - Analyze files, read EXIF, infer dates, detect meaningful folders
 - `export` - Export a scan report for review (JSON/CSV) (v0.2)
-- `dryrun` - Simulate operations without touching disk
-- `plan` - Generate an executable plan file (JSON) (planned v0.5)
 - `apply` - Perform actual file moves and renames
 - `verify` - Verify copy integrity using hash comparison (v0.3.1)
 - `cleanup` - Delete verified source files (v0.3.1)
-- `tags` - Manage/inspect folder-tag rules
-- `report` - Show summary reports after scan or apply
 - `config` - Show or edit configuration settings
 - `doctor` - Check system dependencies and configuration (v0.3.1)
-- `hash` - Compute hashes for debugging or tests
 - `version` — Show tool version
+
+**Planned commands (v0.5):**
+
+- `dryrun` - Simulate operations without touching disk
+- `plan` - Generate an executable plan file (JSON)
+- `report` - Show summary reports after scan or apply
 
 **Command Details**
 ===================
@@ -174,92 +173,55 @@ Safeguards:
 - Keeps backups in `.chronoclean/backups/` (if enabled)
 - Duplicate handling occurs during apply based on `duplicates.on_collision` config
 
-Folder Tag Management Commands
-=============================
+Planned Commands (v0.5)
+=======================
 
-5. **tags list**
-------------
+**report scan** - Summary of the last scan.
+
+**report apply** - Summary after processing (moved, renamed, conflicts, duplicates).
+
+**Note:** The `dryrun`, `plan`, and `report` commands are planned for v0.5. Currently, use `apply --dry-run` for simulation.
+
+Desired Commands (Future)
+=========================
+
+The following commands are desired features for folder tag analysis and management.
+Version TBD based on roadmap prioritization.
+
+**tags list**
 
 List folder-tag classification.
 
-Usage:
-
-`chronoclean tags list`
+Usage: `chronoclean tags list`
 
 Shows:
-
-- Meaningful folders
-- Junk folders
+- Meaningful folders (will become tags)
+- Junk folders (ignored)
 - Unclassified folders
-- Ignored folders
 
-6. **tags classify**
------------------
+**tags classify**
 
-Manual classification.
+Manual classification of a folder name.
 
-Usage:
-
-`chronoclean tags classify "<folder>" <action>`
+Usage: `chronoclean tags classify "<folder>" <action>`
 
 Examples:
+- `chronoclean tags classify "Paris 2022" use` — Mark as meaningful tag
+- `chronoclean tags classify "tosort" ignore` — Mark as junk/ignored
 
-`chronoclean tags classify "Paris 2022" use`
+**tags auto**
 
-`chronoclean tags classify "tosort" ignore`
+Automatically classify folders using heuristics.
 
-7. **tags auto**
-------------
-
-Automatically classify using heuristics.
-
-Usage:
-
-`chronoclean tags auto`
+Usage: `chronoclean tags auto`
 
 Heuristics include:
-
 - String patterns (`misc`, `temp`, `backup`, `DCIM`)
 - Semantic similarity (`wedding`, `vacation`, `birthday`)
 - Filename similarity checks
 
-Reporting Commands
-==================
-
-8. **report scan**
---------------
-
-Summary of the last scan.
-
-Usage:
-
-`chronoclean report scan`
-
-9. **report apply**
----------------
-
-Summary after processing:
-
-- Moved files
-- Renamed files
-- Conflicts
-- Duplicates
-
-Usage:
-
-`chronoclean report apply`
-
-Utility Commands
-================
-
-10. **hash**
---------
-
-Compute a hash of a file.
-
-Usage:
-
-`chronoclean hash <file>`
+Implemented Commands
+====================
 
 11. **config**
 ----------
@@ -358,10 +320,19 @@ Usage:
 Suggested CLI Behavior Summary
 =============================
 
+**Today (implemented):**
 - Scan images: `chronoclean scan /path/to/photos`
-- Export plan: `chronoclean export json`
-- Simulate: `chronoclean dryrun`
-- Apply: `chronoclean apply --rename --tag-names`
+- Export report: `chronoclean export json`
+- Simulate: `chronoclean apply --dry-run <source> <dest>`
+- Apply: `chronoclean apply --rename --tag-names <source> <dest>`
+- Verify: `chronoclean verify <source> <dest>`
+- Cleanup: `chronoclean cleanup <source> <dest>`
+
+**Planned (v0.5):**
+- Standalone dryrun: `chronoclean dryrun`
 - Show scan report: `chronoclean report scan`
+
+**Desired (future):**
 - Classify folder name: `chronoclean tags classify "ParisTrip" use`
 - Ignore junk folder: `chronoclean tags classify "tosort" ignore`
+- List tag classifications: `chronoclean tags list`

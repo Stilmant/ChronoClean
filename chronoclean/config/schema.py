@@ -125,9 +125,7 @@ class DuplicatesConfig:
     policy: str = "safe"  # Planned: safe, skip, overwrite (currently unused)
     hashing_algorithm: str = "sha256"  # sha256, md5
     on_collision: str = "check_hash"  # check_hash, rename, skip, fail
-    consider_resolution: bool = True  # Planned: compare image dimensions
-    consider_metadata: bool = True  # Planned: compare EXIF metadata
-    cache_hashes: bool = True  # Planned: persistent hash cache
+    cache_hashes: bool = True  # Planned v0.6: persistent hash cache
 
 
 @dataclass
