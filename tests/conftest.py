@@ -19,6 +19,21 @@ from chronoclean.core.models import DateSource, FileRecord, FileType, ScanResult
 
 
 # =============================================================================
+# Test Isolation
+# =============================================================================
+
+
+@pytest.fixture(autouse=True)
+def isolate_working_directory(tmp_path, monkeypatch):
+    """Automatically isolate all tests in a temporary directory.
+    
+    This prevents tests from creating artifacts (like .chronoclean/) 
+    in the project directory. All tests run with tmp_path as cwd.
+    """
+    monkeypatch.chdir(tmp_path)
+
+
+# =============================================================================
 # Path Fixtures
 # =============================================================================
 

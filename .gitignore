@@ -76,3 +76,6 @@ coverage.xml
 
 # Windows
 Thumbs.db
+
+# ChronoClean test artifacts
+.chronoclean/
