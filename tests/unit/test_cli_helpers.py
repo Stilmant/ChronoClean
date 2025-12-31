@@ -2,7 +2,7 @@
 
 import pytest
 
-from chronoclean.cli.main import _build_date_priority
+from chronoclean.cli.helpers import _build_date_priority
 from chronoclean.config.loader import ChronoCleanConfig
 
 

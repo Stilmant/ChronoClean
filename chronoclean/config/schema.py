@@ -76,11 +76,11 @@ class SortingConfig:
 
 @dataclass
 class HeuristicConfig:
-    """Heuristic date inference settings."""
+    """Heuristic date inference settings (deferred from v0.3)."""
 
-    enabled: bool = False  # v0.3: Changed default to False for safety
-    max_days_from_cluster: int = 2
-    min_cluster_size: int = 3  # v0.3: Minimum files needed to form a cluster
+    enabled: bool = False  # Deferred: cluster-based date inference disabled by default
+    max_days_from_cluster: int = 2  # Deferred: max days offset from cluster median
+    min_cluster_size: int = 3  # Deferred: minimum files to form a cluster
 
 
 @dataclass
@@ -122,7 +122,7 @@ class DuplicatesConfig:
     """Duplicate handling configuration settings."""
 
     enabled: bool = True
-    policy: str = "safe"  # Planned: safe, skip, overwrite (currently unused)
+    policy: str = "safe"  # Planned (future): safe, skip, overwrite (currently unused)
     hashing_algorithm: str = "sha256"  # sha256, md5
     on_collision: str = "check_hash"  # check_hash, rename, skip, fail
     cache_hashes: bool = True  # Planned v0.6: persistent hash cache
@@ -152,8 +152,8 @@ class DateMismatchConfig:
 
     enabled: bool = True
     threshold_days: int = 1
-    warn_on_scan: bool = True  # Planned: show warnings during scan
-    include_in_export: bool = True  # Planned: conditionally include in export
+    warn_on_scan: bool = True  # Planned (future): show warnings during scan
+    include_in_export: bool = True  # Planned (future): conditionally include in export
 
 
 @dataclass
@@ -208,13 +208,13 @@ class LoggingConfig:
 
 @dataclass
 class PerformanceConfig:
-    """Performance configuration settings."""
+    """Performance configuration settings (planned v0.6)."""
 
-    multiprocessing: bool = True
-    max_workers: int = 0  # 0 = auto
-    chunk_size: int = 500
-    enable_cache: bool = True
-    cache_location: str = ".chronoclean/cache.db"
+    multiprocessing: bool = True  # Planned v0.6: parallel scan/inference
+    max_workers: int = 0  # Planned v0.6: 0 = auto-detect CPU count
+    chunk_size: int = 500  # Planned v0.6: batch processing size
+    enable_cache: bool = True  # Planned v0.6: metadata caching
+    cache_location: str = ".chronoclean/cache.db"  # Planned v0.6: SQLite cache path
 
 
 @dataclass
