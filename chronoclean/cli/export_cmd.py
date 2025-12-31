@@ -155,13 +155,19 @@ def create_export_app() -> typer.Typer:
         Scans the source directory and exports the results to CSV.
         By default outputs to stdout; use --output to write to a file.
         """
+        import sys
+        from rich.console import Console
+        
+        # Use stderr console for status messages when outputting to stdout
+        stderr_console = Console(stderr=True)
+        
         # Load configuration
         cfg = ConfigLoader.load(config)
         
-        console.print(f"[blue]Scanning:[/blue] {source}", stderr=True)
+        stderr_console.print(f"[blue]Scanning:[/blue] {source}")
         if config:
-            console.print(f"[dim]Config: {config}[/dim]", stderr=True)
-        console.print(stderr=True)
+            stderr_console.print(f"[dim]Config: {config}[/dim]")
+        stderr_console.print()
         
         # Perform scan
         result = _perform_scan(source, cfg, recursive, videos, limit)
@@ -173,8 +179,8 @@ def create_export_app() -> typer.Typer:
         csv_str = exporter.to_csv(result, output)
         
         if output:
-            console.print(f"[green]Exported to:[/green] {output}", stderr=True)
-            console.print(f"[dim]Files: {len(result.files)}[/dim]", stderr=True)
+            stderr_console.print(f"[green]Exported to:[/green] {output}")
+            stderr_console.print(f"[dim]Files: {len(result.files)}[/dim]")
         else:
             # Output to stdout (without rich formatting)
             print(csv_str, end="")
