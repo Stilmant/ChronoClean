@@ -161,8 +161,10 @@ sorting:
         result = runner.invoke(app, ["config", "show", "-c", str(config_file)])
         
         assert result.exit_code == 0
-        # Should show the custom file as source
-        assert "custom.yaml" in result.stdout
+        # Should show the custom file as source (handle potential line wrapping in narrow terminals)
+        # Remove newlines for comparison since Rich may wrap long paths
+        output_no_wrap = result.stdout.replace("\n", "")
+        assert "custom.yaml" in output_no_wrap
 
 
 class TestConfigPath:
