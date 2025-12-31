@@ -69,33 +69,6 @@ def safe_filename(filename: str, max_length: int = 255) -> str:
     return safe
 
 
-def get_unique_path(path: Path) -> Path:
-    """
-    Get a unique path by adding a counter if needed.
-
-    Args:
-        path: Desired path
-
-    Returns:
-        Unique path
-    """
-    if not path.exists():
-        return path
-
-    stem = path.stem
-    suffix = path.suffix
-    parent = path.parent
-
-    counter = 1
-    while True:
-        new_path = parent / f"{stem}_{counter:03d}{suffix}"
-        if not new_path.exists():
-            return new_path
-        counter += 1
-        if counter > 9999:
-            raise ValueError(f"Cannot find unique path for {path}")
-
-
 def relative_to_safe(path: Path, base: Path) -> Optional[Path]:
     """
     Safely get relative path, returning None if not relative.

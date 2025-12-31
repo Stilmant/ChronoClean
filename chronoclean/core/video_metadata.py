@@ -16,6 +16,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
+from chronoclean.utils.deps import is_hachoir_available, get_hachoir_version
+
 logger = logging.getLogger(__name__)
 
 
@@ -446,28 +448,11 @@ def get_ffprobe_version(ffprobe_path: str = "ffprobe") -> Optional[str]:
         return None
 
 
-def is_hachoir_available() -> bool:
-    """Check if hachoir package is installed.
-    
-    Returns:
-        True if hachoir is importable
-    """
-    try:
-        import hachoir  # noqa: F401
-        return True
-    except ImportError:
-        return False
-
-
-def get_hachoir_version() -> Optional[str]:
-    """Get the installed hachoir package version.
-    
-    Returns:
-        Version string or None if not installed
-    """
-    try:
-        import hachoir
-        return getattr(hachoir, "__version__", "unknown")
-    except ImportError:
-        return None
-
+# Re-export for backward compatibility
+__all__ = [
+    "VideoMetadataReader",
+    "is_ffprobe_available",
+    "get_ffprobe_version",
+    "is_hachoir_available",
+    "get_hachoir_version",
+]

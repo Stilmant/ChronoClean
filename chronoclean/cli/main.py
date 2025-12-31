@@ -1,4 +1,6 @@
 """Main CLI application for ChronoClean."""
+# pylint: disable=too-many-locals,too-many-branches,too-many-statements
+# CLI orchestrators naturally have high complexity due to argument handling and dispatch
 
 import time
 from pathlib import Path

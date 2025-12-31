@@ -2,6 +2,8 @@
 
 This module provides shared utilities to reduce code duplication across CLI commands.
 """
+# pylint: disable=too-many-branches
+# Helper dispatch functions have inherent branching complexity
 
 from dataclasses import dataclass
 from pathlib import Path

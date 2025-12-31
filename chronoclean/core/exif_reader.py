@@ -8,6 +8,12 @@ from typing import Any, Optional
 
 import exifread
 
+from chronoclean.utils.constants import EXIF_DATE_FORMATS
+from chronoclean.utils.deps import (
+    is_exiftool_available,
+    get_exifread_version,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -48,14 +54,8 @@ class ExifReader:
         "EXIF DateTime",
     ]
 
-    # Common EXIF date formats
-    DATE_FORMATS = [
-        "%Y:%m:%d %H:%M:%S",
-        "%Y-%m-%d %H:%M:%S",
-        "%Y/%m/%d %H:%M:%S",
-        "%Y:%m:%d %H:%M",
-        "%Y-%m-%d %H:%M",
-    ]
+    # Common EXIF date formats (imported from constants)
+    DATE_FORMATS = EXIF_DATE_FORMATS
 
     # Supported file extensions
     SUPPORTED_EXTENSIONS = {
@@ -203,30 +203,11 @@ class ExifReader:
         return self.get_date(file_path) is not None
 
 
-def is_exiftool_available() -> bool:
-    """Check if exiftool (PyExifTool) is available.
-    
-    Note: ChronoClean uses exifread by default, which is a pure Python library.
-    This check is for the optional exiftool binary integration.
-    
-    Returns:
-        True if exiftool package is importable
-    """
-    try:
-        import exiftool  # noqa: F401
-        return True
-    except ImportError:
-        return False
-
-
-def get_exifread_version() -> str:
-    """Get the installed exifread package version.
-    
-    Returns:
-        Version string or 'unknown' if not available
-    """
-    try:
-        import exifread
-        return getattr(exifread, "__version__", "unknown")
-    except ImportError:
-        return "not installed"
+# Re-export for backward compatibility
+__all__ = [
+    "ExifReader",
+    "ExifData",
+    "ExifReadError",
+    "is_exiftool_available",
+    "get_exifread_version",
+]
