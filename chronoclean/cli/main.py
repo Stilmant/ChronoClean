@@ -8,7 +8,6 @@ from typing import Optional
 
 import typer
 import yaml
-from rich.console import Console
 from rich.table import Table
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
@@ -48,23 +47,18 @@ from chronoclean.cli.helpers import (
     resolve_bool,
     _build_date_priority,
 )
-
-# Initialize console
-console = Console()
-
-# Load config at module level to generate dynamic help text
-# This allows --help to show actual defaults from config (or built-in if no config)
-_default_cfg = ConfigLoader.load(None)
-_has_config_file = any(p.exists() for p in ConfigLoader.DEFAULT_CONFIG_PATHS)
-_cfg_note = " via config" if _has_config_file else ""
-
-
-def _bool_show_default(value: bool, true_word: str, false_word: str) -> str:
-    """Generate show_default string for boolean flags."""
-    return f"{true_word if value else false_word}{_cfg_note}"
+from chronoclean.cli._common import (
+    console,
+    _default_cfg,
+    _has_config_file,
+    _cfg_note,
+    bool_show_default,
+    UNSET,
+)
 
 
-# Note: _build_date_priority and resolve_bool are imported from cli.helpers
+# Alias for backward compatibility within this file
+_bool_show_default = bool_show_default
 
 
 app = typer.Typer(
@@ -89,10 +83,6 @@ export_app = typer.Typer(
     no_args_is_help=True,
 )
 app.add_typer(export_app, name="export")
-
-
-# Sentinel value for detecting if CLI option was explicitly set
-UNSET = None
 
 
 @app.callback()
