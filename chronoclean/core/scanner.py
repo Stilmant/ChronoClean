@@ -9,6 +9,11 @@ from chronoclean.core.date_inference import DateInferenceEngine
 from chronoclean.core.exif_reader import ExifReader
 from chronoclean.core.folder_tagger import FolderTagger
 from chronoclean.core.models import DateSource, FileRecord, FileType, ScanResult
+from chronoclean.utils.constants import (
+    IMAGE_EXTENSIONS as DEFAULT_IMAGE_EXTENSIONS,
+    RAW_EXTENSIONS as DEFAULT_RAW_EXTENSIONS,
+    VIDEO_EXTENSIONS as DEFAULT_VIDEO_EXTENSIONS,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -16,18 +21,10 @@ logger = logging.getLogger(__name__)
 class Scanner:
     """Scans directories and builds file records."""
 
-    IMAGE_EXTENSIONS = {
-        ".jpg", ".jpeg", ".png", ".tiff", ".tif",
-        ".heic", ".heif", ".webp", ".bmp", ".gif"
-    }
-    VIDEO_EXTENSIONS = {
-        ".mp4", ".mov", ".avi", ".mkv", ".m4v",
-        ".3gp", ".wmv", ".webm", ".mts", ".m2ts"
-    }
-    RAW_EXTENSIONS = {
-        ".cr2", ".cr3", ".nef", ".arw", ".dng",
-        ".orf", ".rw2", ".raf", ".pef", ".srw"
-    }
+    # Backward-compatible aliases (used by tests and external callers).
+    IMAGE_EXTENSIONS = DEFAULT_IMAGE_EXTENSIONS
+    VIDEO_EXTENSIONS = DEFAULT_VIDEO_EXTENSIONS
+    RAW_EXTENSIONS = DEFAULT_RAW_EXTENSIONS
 
     def __init__(
         self,
@@ -65,9 +62,9 @@ class Scanner:
         self.date_engine = date_engine or DateInferenceEngine(exif_reader=self.exif_reader)
         self.folder_tagger = folder_tagger or FolderTagger()
 
-        self.image_extensions = image_extensions or self.IMAGE_EXTENSIONS
-        self.video_extensions = video_extensions or self.VIDEO_EXTENSIONS
-        self.raw_extensions = raw_extensions or self.RAW_EXTENSIONS
+        self.image_extensions = image_extensions or DEFAULT_IMAGE_EXTENSIONS
+        self.video_extensions = video_extensions or DEFAULT_VIDEO_EXTENSIONS
+        self.raw_extensions = raw_extensions or DEFAULT_RAW_EXTENSIONS
 
         self.include_videos = include_videos
         self.include_raw = include_raw

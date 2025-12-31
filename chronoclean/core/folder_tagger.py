@@ -6,6 +6,8 @@ from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Optional
 
+from chronoclean.utils.constants import DEFAULT_IGNORE_FOLDERS
+
 logger = logging.getLogger(__name__)
 
 
@@ -13,14 +15,7 @@ class FolderTagger:
     """Detects and classifies folder names for potential use as file tags."""
 
     # Default ignore patterns (case-insensitive)
-    DEFAULT_IGNORE_LIST = [
-        "tosort", "unsorted", "misc", "backup", "temp", "tmp",
-        "download", "downloads", "dcim", "camera", "pictures",
-        "photos", "images", "100apple", "100andro", "camera roll",
-        "new folder", "untitled", "unknown", "other", "various",
-        "screenshot", "screenshots", "inbox", "import", "imported",
-        "exports", "export", "shared", "public", "private",
-    ]
+    DEFAULT_IGNORE_LIST = DEFAULT_IGNORE_FOLDERS
 
     # Patterns that look like camera-generated folder names
     CAMERA_FOLDER_PATTERNS = [

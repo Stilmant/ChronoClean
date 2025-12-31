@@ -308,11 +308,9 @@ class DateInferenceEngine:
                         return datetime(year, month, day, hour, minute, second), DateSource.FILENAME
 
                 elif date_type == "ymd" and len(groups) >= 3:
-                    year = int(groups[0])
-                    month = int(groups[1])
-                    day = int(groups[2])
-                    if self._is_valid_date(year, month, day):
-                        return datetime(year, month, day), DateSource.FILENAME
+                    date = self._try_parse_ymd_groups(groups)
+                    if date:
+                        return date, DateSource.FILENAME
 
                 elif date_type == "yymmdd" and len(groups) >= 3:
                     # 2-digit year: apply year cutoff
@@ -338,6 +336,17 @@ class DateInferenceEngine:
         if yy <= self.year_cutoff:
             return 2000 + yy
         return 1900 + yy
+
+    def _try_parse_ymd_groups(self, groups: tuple[str, ...]) -> Optional[datetime]:
+        """Parse (year, month, day) from a regex groups tuple."""
+        if len(groups) < 3:
+            return None
+        year = int(groups[0])
+        month = int(groups[1])
+        day = int(groups[2])
+        if self._is_valid_date(year, month, day):
+            return datetime(year, month, day)
+        return None
 
     def _is_valid_time(self, hour: int, minute: int, second: int) -> bool:
         """Check if time components are valid."""
@@ -365,11 +374,9 @@ class DateInferenceEngine:
                 groups = match.groups()
 
                 if date_type == "ymd" and len(groups) >= 3:
-                    year = int(groups[0])
-                    month = int(groups[1])
-                    day = int(groups[2])
-                    if self._is_valid_date(year, month, day):
-                        return datetime(year, month, day)
+                    date = self._try_parse_ymd_groups(groups)
+                    if date:
+                        return date
 
                 elif date_type == "ym" and len(groups) >= 2:
                     year = int(groups[0])

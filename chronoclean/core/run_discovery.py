@@ -18,6 +18,44 @@ from chronoclean.core.verification import VerificationReport
 logger = logging.getLogger(__name__)
 
 
+def _format_age(created_at: datetime) -> str:
+    """Human-readable age from a timestamp."""
+    delta = datetime.now() - created_at
+
+    if delta.days > 0:
+        return f"{delta.days} day(s) ago"
+
+    hours = delta.seconds // 3600
+    if hours > 0:
+        return f"{hours} hour(s) ago"
+
+    minutes = delta.seconds // 60
+    if minutes > 0:
+        return f"{minutes} minute(s) ago"
+
+    return "just now"
+
+
+def _passes_path_filters(
+    source_root: str,
+    destination_root: str,
+    source_filter: Optional[Path],
+    destination_filter: Optional[Path],
+) -> bool:
+    """Return True when source/destination roots match optional filters."""
+    if source_filter:
+        source_filter_str = str(source_filter.resolve())
+        if not source_root.startswith(source_filter_str):
+            return False
+
+    if destination_filter:
+        dest_filter_str = str(destination_filter.resolve())
+        if not destination_root.startswith(dest_filter_str):
+            return False
+
+    return True
+
+
 @dataclass
 class RunSummary:
     """Summary of a discovered run record for display."""
@@ -34,20 +72,7 @@ class RunSummary:
     @property
     def age_description(self) -> str:
         """Human-readable age of the run."""
-        delta = datetime.now() - self.created_at
-        
-        if delta.days > 0:
-            return f"{delta.days} day(s) ago"
-        
-        hours = delta.seconds // 3600
-        if hours > 0:
-            return f"{hours} hour(s) ago"
-        
-        minutes = delta.seconds // 60
-        if minutes > 0:
-            return f"{minutes} minute(s) ago"
-        
-        return "just now"
+        return _format_age(self.created_at)
     
     @property
     def mode_description(self) -> str:
@@ -79,20 +104,7 @@ class VerificationSummary:
     @property
     def age_description(self) -> str:
         """Human-readable age of the verification."""
-        delta = datetime.now() - self.created_at
-        
-        if delta.days > 0:
-            return f"{delta.days} day(s) ago"
-        
-        hours = delta.seconds // 3600
-        if hours > 0:
-            return f"{hours} hour(s) ago"
-        
-        minutes = delta.seconds // 60
-        if minutes > 0:
-            return f"{minutes} minute(s) ago"
-        
-        return "just now"
+        return _format_age(self.created_at)
     
     @property
     def cleanup_eligible_count(self) -> int:
@@ -141,16 +153,8 @@ def discover_run_records(
             source_root = data.get("source_root", "")
             destination_root = data.get("destination_root", "")
             
-            # Apply filters
-            if source_filter:
-                source_filter_str = str(source_filter.resolve())
-                if not source_root.startswith(source_filter_str):
-                    continue
-            
-            if destination_filter:
-                dest_filter_str = str(destination_filter.resolve())
-                if not destination_root.startswith(dest_filter_str):
-                    continue
+            if not _passes_path_filters(source_root, destination_root, source_filter, destination_filter):
+                continue
             
             summary_data = data.get("summary", {})
             
@@ -208,16 +212,8 @@ def discover_verification_reports(
             source_root = data.get("source_root", "")
             destination_root = data.get("destination_root", "")
             
-            # Apply filters
-            if source_filter:
-                source_filter_str = str(source_filter.resolve())
-                if not source_root.startswith(source_filter_str):
-                    continue
-            
-            if destination_filter:
-                dest_filter_str = str(destination_filter.resolve())
-                if not destination_root.startswith(dest_filter_str):
-                    continue
+            if not _passes_path_filters(source_root, destination_root, source_filter, destination_filter):
+                continue
             
             summary_data = data.get("summary", {})
             

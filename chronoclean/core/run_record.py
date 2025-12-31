@@ -8,7 +8,8 @@ from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from typing import Any, Optional
-import json
+
+from chronoclean.utils.json_utils import JsonSerializable
 
 
 class RunMode(Enum):
@@ -95,7 +96,7 @@ class ConfigSignature:
 
 
 @dataclass
-class ApplyRunRecord:
+class ApplyRunRecord(JsonSerializable):
     """Complete record of an apply run.
     
     Contains all file operations performed during a single apply command.
@@ -156,19 +157,6 @@ class ApplyRunRecord:
             error_files=summary.get("error_files", 0),
             duration_seconds=summary.get("duration_seconds", 0.0),
         )
-    
-    def to_json(self, pretty: bool = True) -> str:
-        """Convert to JSON string."""
-        return json.dumps(
-            self.to_dict(),
-            indent=2 if pretty else None,
-            ensure_ascii=False,
-        )
-    
-    @classmethod
-    def from_json(cls, json_str: str) -> "ApplyRunRecord":
-        """Create from JSON string."""
-        return cls.from_dict(json.loads(json_str))
     
     def add_entry(
         self,

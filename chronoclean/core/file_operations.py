@@ -35,6 +35,46 @@ class FileOperations:
         self.create_dirs = create_dirs
         self.preserve_metadata = preserve_metadata
 
+    def _prepare_file_op(
+        self,
+        source: Path,
+        destination: Path,
+        verb: str,
+    ) -> tuple[bool, Path, Path, str, bool]:
+        """
+        Resolve/validate paths and handle dry-run logging for a file operation.
+
+        Returns:
+            (ok, resolved_source, resolved_destination, message, handled)
+
+        Where:
+        - ok/message: final result if handled=True, or validation failure
+        - handled=True means the caller should return (ok, message) immediately
+        """
+        resolved_source = Path(source).resolve()
+        resolved_destination = Path(destination).resolve()
+
+        if not resolved_source.exists():
+            return False, resolved_source, resolved_destination, f"Source file not found: {resolved_source}", True
+
+        if not resolved_source.is_file():
+            return False, resolved_source, resolved_destination, f"Source is not a file: {resolved_source}", True
+
+        if resolved_destination.exists():
+            return (
+                False,
+                resolved_source,
+                resolved_destination,
+                f"Destination already exists: {resolved_destination}",
+                True,
+            )
+
+        if self.dry_run:
+            logger.info(f"[DRY RUN] Would {verb}: {resolved_source} -> {resolved_destination}")
+            return True, resolved_source, resolved_destination, "Dry run - no changes made", True
+
+        return True, resolved_source, resolved_destination, "", False
+
     def move_file(
         self,
         source: Path,
@@ -50,24 +90,9 @@ class FileOperations:
         Returns:
             Tuple of (success: bool, message: str)
         """
-        source = Path(source).resolve()
-        destination = Path(destination).resolve()
-
-        # Validate source
-        if not source.exists():
-            return False, f"Source file not found: {source}"
-
-        if not source.is_file():
-            return False, f"Source is not a file: {source}"
-
-        # Check if destination already exists
-        if destination.exists():
-            return False, f"Destination already exists: {destination}"
-
-        # Dry run mode
-        if self.dry_run:
-            logger.info(f"[DRY RUN] Would move: {source} -> {destination}")
-            return True, "Dry run - no changes made"
+        ok, source, destination, message, handled = self._prepare_file_op(source, destination, "move")
+        if handled:
+            return ok, message
 
         try:
             # Create destination directory if needed
@@ -103,24 +128,9 @@ class FileOperations:
         Returns:
             Tuple of (success: bool, message: str)
         """
-        source = Path(source).resolve()
-        destination = Path(destination).resolve()
-
-        # Validate source
-        if not source.exists():
-            return False, f"Source file not found: {source}"
-
-        if not source.is_file():
-            return False, f"Source is not a file: {source}"
-
-        # Check if destination already exists
-        if destination.exists():
-            return False, f"Destination already exists: {destination}"
-
-        # Dry run mode
-        if self.dry_run:
-            logger.info(f"[DRY RUN] Would copy: {source} -> {destination}")
-            return True, "Dry run - no changes made"
+        ok, source, destination, message, handled = self._prepare_file_op(source, destination, "copy")
+        if handled:
+            return ok, message
 
         try:
             # Create destination directory if needed

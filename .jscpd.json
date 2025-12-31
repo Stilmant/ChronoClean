@@ -1,0 +1,16 @@
+{
+  "languages": {
+    "python": {
+      "minLines": 10,
+      "minTokens": 70
+    }
+  },
+  "threshold": 5,
+  "reporters": [
+    "console"
+  ],
+  "ignore": [
+    "**/tests/**",
+    "**/__init__.py"
+  ]
+}

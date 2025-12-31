@@ -8,7 +8,8 @@ from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from typing import Any, Optional
-import json
+
+from chronoclean.utils.json_utils import JsonSerializable
 
 
 class VerificationStatus(Enum):
@@ -143,7 +144,7 @@ class VerificationSummary:
 
 
 @dataclass
-class VerificationReport:
+class VerificationReport(JsonSerializable):
     """Complete verification report.
     
     Contains all verification results for a set of files.
@@ -190,19 +191,6 @@ class VerificationReport:
             summary=VerificationSummary.from_dict(data.get("summary", {})),
             duration_seconds=data.get("duration_seconds", 0.0),
         )
-    
-    def to_json(self, pretty: bool = True) -> str:
-        """Convert to JSON string."""
-        return json.dumps(
-            self.to_dict(),
-            indent=2 if pretty else None,
-            ensure_ascii=False,
-        )
-    
-    @classmethod
-    def from_json(cls, json_str: str) -> "VerificationReport":
-        """Create from JSON string."""
-        return cls.from_dict(json.loads(json_str))
     
     def add_entry(self, entry: VerifyEntry) -> None:
         """Add an entry and update summary counts."""
