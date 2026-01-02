@@ -18,16 +18,16 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install tools
+      - name: Install Python tools
         run: |
           python -m pip install --upgrade pip
-          python -m pip install pylint radon jscpd
+          python -m pip install pylint radon
 
       - name: Duplication check (jscpd)
         run: |
           npx --yes jscpd -c .jscpd.json .
 
-      - name: Structural lint (pylint – warnings only)
+      - name: Structural lint (pylint, warnings only)
         run: |
           python -m pylint chronoclean \
             --disable=all \
