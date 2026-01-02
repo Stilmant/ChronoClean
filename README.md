@@ -1,6 +1,6 @@
 # ChronoClean
 
-![Status](https://img.shields.io/badge/status-v0.3.3_prototype-blue)
+![Status](https://img.shields.io/badge/status-v0.3.4_prototype-blue)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Platform](https://img.shields.io/badge/platform-SynologyNAS-lightgrey)
@@ -292,9 +292,17 @@ Quick usage reminder (after install):
 chronoclean scan /volume1/photos
 chronoclean scan /volume1/photos --report  # Detailed per-file report
 
+# Review folder tag classifications (v0.3.4)
+chronoclean tags list /volume1/photos
+chronoclean tags classify "Paris 2024" use --tag "ParisTrip"
+chronoclean tags classify "temp" ignore
+
 # Export scan results (v0.2)
 chronoclean export json /volume1/photos -o results.json
 chronoclean export csv /volume1/photos -o results.csv
+
+# Export with destination preview (v0.3.4)
+chronoclean export json /volume1/photos --destination /volume1/archive -o preview.json
 
 # Organize files (dry-run by default)
 chronoclean apply /volume1/unsorted /volume1/photos

@@ -1,4 +1,4 @@
-"""Export commands for ChronoClean CLI."""
+"""Export commands for ChronoClean CLI (v0.3.4: with destination computation support)."""
 
 from pathlib import Path
 from typing import Annotated, Callable, Optional
@@ -13,6 +13,7 @@ from chronoclean.cli.helpers import (
     create_scan_components,
     validate_source_dir,
     resolve_bool,
+    get_config,
 )
 from chronoclean.cli.options import (
     SourceScanArg,
@@ -22,11 +23,52 @@ from chronoclean.cli.options import (
     ConfigOpt,
 )
 from chronoclean.core.exporter import Exporter
+from chronoclean.core.sorter import Sorter  # v0.3.4: for destination computation
+from chronoclean.core.renamer import Renamer, ConflictResolver  # v0.3.4
 
 OutputOpt = Annotated[
     Optional[Path],
     typer.Option("--output", "-o", help="Output file path (default: stdout)"),
 ]
+
+# v0.3.4: New options for destination-aware export
+DestinationOpt = Annotated[
+    Optional[Path],
+    typer.Option(
+        "--destination",
+        "-d",
+        help="Compute proposed destinations (enables destination-aware mode)",
+    ),
+]
+SampleOpt = Annotated[
+    Optional[int],
+    typer.Option(
+        "--sample",
+        help="Compute destinations for only first N files (for performance)",
+    ),
+]
+RenameOpt = Annotated[
+    Optional[bool],
+    typer.Option(
+        "--rename/--no-rename",
+        help="Simulate renaming when computing destinations",
+    ),
+]
+TagNamesOpt = Annotated[
+    Optional[bool],
+    typer.Option(
+        "--tag-names/--no-tag-names",
+        help="Simulate tag-name appending when computing destinations",
+    ),
+]
+StructureOpt = Annotated[
+    Optional[str],
+    typer.Option(
+        "--structure",
+        help="Folder structure for proposed destinations (YYYY/MM, YYYY/MM/DD, etc.)",
+    ),
+]
+
 StatisticsOpt = Annotated[
     bool,
     typer.Option(
@@ -70,6 +112,77 @@ def _perform_scan(
     return result
 
 
+def _compute_proposed_destinations(
+    result,
+    cfg: ChronoCleanConfig,
+    destination: Path,
+    use_rename: bool,
+    use_tag_names: bool,
+    folder_structure: str,
+    sample: Optional[int] = None,
+    status_console: Console = console,
+):
+    """Compute proposed destinations for scan results (v0.3.4)."""
+    # Create sorter with specified structure
+    sorter = Sorter(
+        base_path=destination,
+        folder_structure=folder_structure,
+    )
+    
+    # Create renamer if needed
+    renamer = None
+    conflict_resolver = None
+    if use_rename:
+        renamer = Renamer(
+            pattern=cfg.renaming.pattern,
+            date_format=cfg.renaming.date_format,
+            time_format=cfg.renaming.time_format,
+            tag_format=cfg.renaming.tag_part_format,
+            lowercase_ext=cfg.renaming.lowercase_extensions,
+        )
+        conflict_resolver = ConflictResolver(renamer)
+    
+    # Compute destinations
+    count = 0
+    with status_console.status("[bold blue]Computing proposed destinations..."):
+        for record in result.files:
+            if sample and count >= sample:
+                break
+            
+            if not record.detected_date:
+                continue
+            
+            # Compute destination folder
+            dest_folder = sorter.compute_destination_folder(record.detected_date)
+            record.proposed_destination_folder = dest_folder
+            
+            # Compute filename
+            if use_rename and renamer and conflict_resolver:
+                tag = record.folder_tag if use_tag_names and record.folder_tag_usable else None
+                new_filename = conflict_resolver.resolve(
+                    record.source_path,
+                    record.detected_date,
+                    tag=tag,
+                )
+                record.proposed_filename = new_filename
+            elif use_tag_names and record.folder_tag_usable and record.folder_tag:
+                # Tag-only mode
+                if not renamer:
+                    renamer = Renamer(lowercase_ext=cfg.renaming.lowercase_extensions)
+                base = record.source_path.stem
+                ext = record.source_path.suffix
+                tag_part = renamer.format_tag_part(record.folder_tag)
+                record.proposed_filename = f"{base}{tag_part}{ext}"
+            else:
+                # Keep original filename
+                record.proposed_filename = record.source_path.name
+            
+            count += 1
+    
+    if sample and count < len(result.files):
+        status_console.print(f"[yellow]Note: Computed destinations for {count}/{len(result.files)} files (--sample limit)[/yellow]")
+
+
 def _print_plain(output: str) -> None:
     print(output, end="")
 
@@ -82,6 +195,11 @@ def _run_export(
     videos: Optional[bool],
     limit: Optional[int],
     config: Optional[Path],
+    destination: Optional[Path],  # v0.3.4
+    sample: Optional[int],  # v0.3.4
+    use_rename: bool,  # v0.3.4
+    use_tag_names: bool,  # v0.3.4
+    folder_structure: str,  # v0.3.4
     status_console: Console,
     export_fn: Callable[[object, Optional[Path]], str],
     output_writer: Callable[[str], None],
@@ -94,6 +212,20 @@ def _run_export(
     status_console.print()
     
     result = _perform_scan(source, cfg, recursive, videos, limit)
+    
+    # v0.3.4: Compute proposed destinations if requested
+    if destination:
+        _compute_proposed_destinations(
+            result,
+            cfg,
+            destination,
+            use_rename,
+            use_tag_names,
+            folder_structure,
+            sample,
+            status_console,
+        )
+    
     output_str = export_fn(result, output)
     
     if output:
@@ -119,6 +251,11 @@ def create_export_app() -> typer.Typer:
         recursive: RecursiveOpt = None,
         videos: VideosOpt = None,
         limit: LimitOpt = None,
+        destination: DestinationOpt = None,  # v0.3.4
+        sample: SampleOpt = None,  # v0.3.4
+        rename: RenameOpt = None,  # v0.3.4
+        tag_names: TagNamesOpt = None,  # v0.3.4
+        structure: StructureOpt = None,  # v0.3.4
         statistics: StatisticsOpt = True,
         pretty: PrettyOpt = True,
         config: ConfigOpt = None,
@@ -128,7 +265,16 @@ def create_export_app() -> typer.Typer:
         
         Scans the source directory and exports the results to JSON.
         By default outputs to stdout; use --output to write to a file.
+        
+        v0.3.4: Use --destination to compute proposed target paths.
         """
+        cfg = get_config(config)
+        
+        # Resolve destination-related options
+        use_rename = resolve_bool(rename, cfg.renaming.enabled)
+        use_tag_names = resolve_bool(tag_names, cfg.folder_tags.enabled)
+        folder_structure = structure or cfg.sorting.folder_structure
+        
         exporter = Exporter(
             include_statistics=statistics,
             pretty_print=pretty,
@@ -140,6 +286,11 @@ def create_export_app() -> typer.Typer:
             videos=videos,
             limit=limit,
             config=config,
+            destination=destination,
+            sample=sample,
+            use_rename=use_rename,
+            use_tag_names=use_tag_names,
+            folder_structure=folder_structure,
             status_console=console,
             export_fn=exporter.to_json,
             output_writer=console.print,
@@ -152,6 +303,11 @@ def create_export_app() -> typer.Typer:
         recursive: RecursiveOpt = None,
         videos: VideosOpt = None,
         limit: LimitOpt = None,
+        destination: DestinationOpt = None,  # v0.3.4
+        sample: SampleOpt = None,  # v0.3.4
+        rename: RenameOpt = None,  # v0.3.4
+        tag_names: TagNamesOpt = None,  # v0.3.4
+        structure: StructureOpt = None,  # v0.3.4
         config: ConfigOpt = None,
     ):
         """
@@ -159,7 +315,16 @@ def create_export_app() -> typer.Typer:
         
         Scans the source directory and exports the results to CSV.
         By default outputs to stdout; use --output to write to a file.
+        
+        v0.3.4: Use --destination to compute proposed target paths.
         """
+        cfg = get_config(config)
+        
+        # Resolve destination-related options
+        use_rename = resolve_bool(rename, cfg.renaming.enabled)
+        use_tag_names = resolve_bool(tag_names, cfg.folder_tags.enabled)
+        folder_structure = structure or cfg.sorting.folder_structure
+        
         # Use stderr console for status messages when outputting to stdout
         stderr_console = Console(stderr=True)
         exporter = Exporter()
@@ -170,6 +335,11 @@ def create_export_app() -> typer.Typer:
             videos=videos,
             limit=limit,
             config=config,
+            destination=destination,
+            sample=sample,
+            use_rename=use_rename,
+            use_tag_names=use_tag_names,
+            folder_structure=folder_structure,
             status_console=stderr_console,
             export_fn=exporter.to_csv,
             output_writer=_print_plain,

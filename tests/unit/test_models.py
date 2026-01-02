@@ -127,18 +127,38 @@ class TestFileRecord:
         file_path = temp_dir / "test.jpg"
         file_path.write_bytes(b"test")
 
+        # Test with array-based tags (v0.3.4+)
         record = FileRecord(
             source_path=file_path,
             file_type=FileType.IMAGE,
             size_bytes=100,
             source_folder_name="Paris 2024",
-            folder_tag="Paris_2024",
-            folder_tag_usable=True,
+            folder_tags=["Paris_2024"],
+            folder_tag_reasons=["parent_folder"],
         )
 
         assert record.source_folder_name == "Paris 2024"
+        assert record.folder_tags == ["Paris_2024"]
+        assert record.folder_tag_reasons == ["parent_folder"]
+        # Backward-compatible properties
         assert record.folder_tag == "Paris_2024"
+        assert record.folder_tag_reason == "parent_folder"
         assert record.folder_tag_usable is True
+
+    def test_folder_tag_empty(self, temp_dir: Path):
+        """Test folder_tag_usable returns False when no tags."""
+        file_path = temp_dir / "test.jpg"
+        file_path.write_bytes(b"test")
+
+        record = FileRecord(
+            source_path=file_path,
+            file_type=FileType.IMAGE,
+            size_bytes=100,
+        )
+
+        assert record.folder_tags == []
+        assert record.folder_tag is None
+        assert record.folder_tag_usable is False
 
 
 class TestScanResult:

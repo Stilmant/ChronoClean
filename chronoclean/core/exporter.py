@@ -157,6 +157,18 @@ class Exporter:
             # v0.3: Video metadata and error category
             "video_metadata_date": record.video_metadata_date.isoformat() if record.video_metadata_date else None,
             "error_category": record.error_category,
+            # v0.3.4: Folder tag fields
+            "source_folder_name": record.source_folder_name,
+            "folder_tags": record.folder_tags,
+            "folder_tag_reasons": record.folder_tag_reasons,
+            "folder_tag": record.folder_tag,  # Convenience: first tag
+            "folder_tag_reason": record.folder_tag_reason,  # Convenience: first reason
+            "folder_tag_usable": record.folder_tag_usable,
+            # v0.3.4: Proposed destinations (for export --destination mode)
+            "proposed_destination_folder": str(record.proposed_destination_folder) if record.proposed_destination_folder else None,
+            "proposed_filename": record.proposed_filename,
+            "proposed_target_path": str(record.proposed_target_path) if record.proposed_target_path else None,
+            # Duplicate detection
             "file_hash": record.file_hash,
             "is_duplicate": record.is_duplicate,
             "duplicate_of": str(record.duplicate_of) if record.duplicate_of else None,
@@ -194,6 +206,18 @@ class Exporter:
             # v0.3: Video metadata and error category
             record.video_metadata_date.isoformat() if record.video_metadata_date else "",
             record.error_category or "",
+            # v0.3.4: Folder tag fields
+            record.source_folder_name or "",
+            "|".join(record.folder_tags) if record.folder_tags else "",
+            "|".join(record.folder_tag_reasons) if record.folder_tag_reasons else "",
+            record.folder_tag or "",
+            record.folder_tag_reason or "",
+            record.folder_tag_usable or False,
+            # v0.3.4: Proposed destinations
+            str(record.proposed_destination_folder) if record.proposed_destination_folder else "",
+            record.proposed_filename or "",
+            str(record.proposed_target_path) if record.proposed_target_path else "",
+            # Duplicate detection
             record.file_hash or "",
             record.is_duplicate or False,
             str(record.duplicate_of) if record.duplicate_of else "",
@@ -221,6 +245,18 @@ class Exporter:
             # v0.3: Video metadata and error category
             "video_metadata_date",
             "error_category",
+            # v0.3.4: Folder tag fields
+            "source_folder_name",
+            "folder_tags",
+            "folder_tag_reasons",
+            "folder_tag",
+            "folder_tag_reason",
+            "folder_tag_usable",
+            # v0.3.4: Proposed destinations
+            "proposed_destination_folder",
+            "proposed_filename",
+            "proposed_target_path",
+            # Duplicate detection
             "file_hash",
             "is_duplicate",
             "duplicate_of",

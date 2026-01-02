@@ -13,6 +13,7 @@ import typer
 from rich.console import Console
 
 from chronoclean.config.schema import ChronoCleanConfig
+from chronoclean.config import ConfigLoader
 from chronoclean.core.date_inference import DateInferenceEngine
 from chronoclean.core.exif_reader import ExifReader
 from chronoclean.core.folder_tagger import FolderTagger
@@ -148,13 +149,19 @@ def create_scan_components(cfg: ChronoCleanConfig) -> ScanComponents:
             skip_errors=cfg.video_metadata.skip_errors,
         )
     
-    # Create folder tagger
+    # v0.3.4: Create tag rules store for persistent tag decisions
+    from chronoclean.core.tag_rules_store import TagRulesStore
+    tag_rules_store = TagRulesStore()  # Uses default path: .chronoclean/tag_rules.yaml
+    
+    # Create folder tagger with tag rules store integration
     folder_tagger = FolderTagger(
         ignore_list=cfg.folder_tags.ignore_list,
         force_list=cfg.folder_tags.force_list,
         min_length=cfg.folder_tags.min_length,
         max_length=cfg.folder_tags.max_length,
         distance_threshold=cfg.folder_tags.distance_threshold,
+        tag_rules_store=tag_rules_store,  # v0.3.4
+        config=cfg.folder_tags,  # v0.3.4
     )
     
     # Create date inference engine
@@ -174,6 +181,18 @@ def create_scan_components(cfg: ChronoCleanConfig) -> ScanComponents:
         date_engine=date_engine,
         cfg=cfg,
     )
+
+
+def get_config(config_path: Optional[Path] = None) -> ChronoCleanConfig:
+    """Load configuration from file or use defaults.
+    
+    Args:
+        config_path: Optional path to config file
+        
+    Returns:
+        Loaded configuration
+    """
+    return ConfigLoader.load(config_path)
 
 
 def validate_source_dir(path: Path, console: Console) -> Path:

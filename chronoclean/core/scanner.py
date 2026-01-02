@@ -271,13 +271,23 @@ class Scanner:
                     record.date_mismatch = True
                     record.date_mismatch_days = delta
 
-        # Get folder tag
-        tag = self.folder_tagger.extract_tag(file_path)
-        if tag:
-            record.folder_tag = tag
-            record.folder_tag_usable = not self.folder_tagger.is_tag_in_filename(
-                file_path.name, tag
-            )
+        # v0.3.4: Get folder tag (array-based for multi-tag support)
+        folder_name = file_path.parent.name
+        record.source_folder_name = folder_name
+        usable, reason = self.folder_tagger.classify_folder(folder_name)
+        if usable:
+            tag = self.folder_tagger.extract_tag(file_path)
+            if tag:
+                # Check if tag is already in filename
+                tag_usable = not self.folder_tagger.is_tag_in_filename(
+                    file_path.name, tag
+                )
+                if tag_usable:
+                    record.folder_tags.append(tag)
+                    record.folder_tag_reasons.append(reason)
+                else:
+                    # Tag exists in filename, don't add but record reason
+                    record.folder_tag_reasons.append("already_in_filename")
 
         return record
 

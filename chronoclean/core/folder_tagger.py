@@ -4,9 +4,13 @@ import logging
 import re
 from difflib import SequenceMatcher
 from pathlib import Path
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 from chronoclean.utils.constants import DEFAULT_IGNORE_FOLDERS
+
+if TYPE_CHECKING:
+    from chronoclean.core.tag_rules_store import TagRulesStore
+    from chronoclean.config.schema import FolderTagsConfig
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +38,8 @@ class FolderTagger:
         min_length: int = 3,
         max_length: int = 40,
         distance_threshold: float = 0.75,
+        tag_rules_store: Optional["TagRulesStore"] = None,
+        config: Optional["FolderTagsConfig"] = None,
     ):
         """
         Initialize the folder tagger.
@@ -44,12 +50,16 @@ class FolderTagger:
             min_length: Minimum tag length
             max_length: Maximum tag length
             distance_threshold: Similarity threshold for detecting existing tags
+            tag_rules_store: Optional tag rules store for persistent decisions (v0.3.4)
+            config: Optional folder tags config for precedence checking (v0.3.4)
         """
         self.ignore_list = {s.lower() for s in (ignore_list or self.DEFAULT_IGNORE_LIST)}
         self.force_list = {s.lower() for s in (force_list or [])}
         self.min_length = min_length
         self.max_length = max_length
         self.distance_threshold = distance_threshold
+        self.tag_rules_store = tag_rules_store
+        self.config = config
 
     def is_meaningful(self, folder_name: str) -> bool:
         """
@@ -72,7 +82,9 @@ class FolderTagger:
 
     def classify_folder(self, folder_name: str) -> tuple[bool, str]:
         """
-        Classify a folder name.
+        Classify a folder name with precedence-aware checking.
+        
+        v0.3.4: Checks tag_rules_store first if available.
 
         Args:
             folder_name: Name of the folder
@@ -85,11 +97,19 @@ class FolderTagger:
 
         name_lower = folder_name.lower().strip()
 
-        # Check force list first (overrides everything)
+        # v0.3.4: Priority 1 - Check tag rules store if available
+        if self.tag_rules_store and self.config:
+            override = self.tag_rules_store.should_use(folder_name, self.config)
+            if override is True:
+                return True, "in_rules_use_list"
+            if override is False:
+                return False, "in_rules_ignore_list"
+        
+        # Priority 2 - Check force list (from config or constructor)
         if name_lower in self.force_list:
             return True, "in_force_list"
 
-        # Check ignore list
+        # Check ignore list (from config or constructor)
         if name_lower in self.ignore_list:
             return False, "in_ignore_list"
 
@@ -153,6 +173,8 @@ class FolderTagger:
     def format_tag(self, folder_name: str) -> str:
         """
         Format a folder name for use as a tag.
+        
+        v0.3.4: Applies alias from tag_rules_store if available.
 
         - Strips whitespace
         - Replaces spaces with underscores
@@ -163,8 +185,14 @@ class FolderTagger:
             folder_name: Raw folder name
 
         Returns:
-            Formatted tag string
+            Formatted tag string (or alias if defined)
         """
+        # v0.3.4: Check for alias first
+        if self.tag_rules_store:
+            alias = self.tag_rules_store.get_alias(folder_name)
+            if alias:
+                return alias
+        
         # Strip and replace spaces
         tag = folder_name.strip()
         tag = re.sub(r"\s+", "_", tag)

@@ -45,10 +45,14 @@ class FileRecord:
     destination_folder: Optional[Path] = None
     destination_filename: Optional[str] = None
 
-    # Folder tag info
+    # Folder tag info (v0.3.4: Array-based for multi-tag support)
     source_folder_name: Optional[str] = None
-    folder_tag: Optional[str] = None
-    folder_tag_usable: bool = False
+    folder_tags: list[str] = field(default_factory=list)
+    folder_tag_reasons: list[str] = field(default_factory=list)
+    
+    # v0.3.4: Proposed destinations for export --destination mode
+    proposed_destination_folder: Optional[Path] = None
+    proposed_filename: Optional[str] = None
 
     # Status flags
     needs_rename: bool = False
@@ -85,6 +89,29 @@ class FileRecord:
     def original_filename(self) -> str:
         """Original filename without path."""
         return self.source_path.name
+    
+    # v0.3.4: Backward-compatible properties for single-tag access
+    @property
+    def folder_tag(self) -> Optional[str]:
+        """Primary folder tag (first one). Backward compatibility."""
+        return self.folder_tags[0] if self.folder_tags else None
+    
+    @property
+    def folder_tag_reason(self) -> Optional[str]:
+        """Reason for primary tag. Backward compatibility."""
+        return self.folder_tag_reasons[0] if self.folder_tag_reasons else None
+    
+    @property
+    def folder_tag_usable(self) -> bool:
+        """Whether any tag is usable. Backward compatibility."""
+        return len(self.folder_tags) > 0
+    
+    @property
+    def proposed_target_path(self) -> Optional[Path]:
+        """Full proposed target path (for export --destination mode)."""
+        if self.proposed_destination_folder and self.proposed_filename:
+            return self.proposed_destination_folder / self.proposed_filename
+        return None
 
 
 @dataclass

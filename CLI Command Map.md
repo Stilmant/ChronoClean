@@ -1,16 +1,17 @@
 **ChronoClean - CLI Command Map**
 =================================
 
-Note: As of v0.3.3, the implemented commands are `scan`, `export`, `apply`, `verify`, `cleanup`, `config`, `doctor`, and `version`.
+Note: As of v0.3.4, the implemented commands are `scan`, `export`, `apply`, `verify`, `cleanup`, `config`, `doctor`, `tags`, and `version`.
 
 ChronoClean supports a quick workflow today, plus an optional plan-based workflow (planned v0.5).
 
 1) **Quick workflow (today)**
 1. **scan** - analyze the library
-2. **export** - export a scan report (JSON/CSV)
-3. **apply** - perform the real operations (defaults to dry-run)
-4. **verify** - verify copy integrity (v0.3.1)
-5. **cleanup** - delete verified source files (v0.3.1)
+2. **tags** - review and classify folder tags (v0.3.4)
+3. **export** - export a scan report (JSON/CSV)
+4. **apply** - perform the real operations (defaults to dry-run)
+5. **verify** - verify copy integrity (v0.3.1)
+6. **cleanup** - delete verified source files (v0.3.1)
 
 2) **Plan-based workflow (planned v0.5)**
 1. **report** - analysis outputs (JSON/CSV)
@@ -30,6 +31,7 @@ Usage:
 **Implemented commands:**
 
 - `scan` - Analyze files, read EXIF, infer dates, detect meaningful folders
+- `tags` - Review and classify folder tags for preflight analysis (v0.3.4)
 - `export` - Export a scan report for review (JSON/CSV) (v0.2)
 - `apply` - Perform actual file moves and renames
 - `verify` - Verify copy integrity using hash comparison (v0.3.1)
@@ -173,33 +175,85 @@ Safeguards:
 - Keeps backups in `.chronoclean/backups/` (if enabled)
 - Duplicate handling occurs during apply based on `duplicates.on_collision` config
 
-Planned Commands (v0.3.4)
-=========================
+6. **tags** (v0.3.4)
+--------
 
-The following commands are planned for folder tag analysis and management.
+Review and classify folder tags before applying changes.
 
-**tags list**
+### tags list
 
 List folder-tag classification from a scan.
 
-Usage: `chronoclean tags list <source>`
+Usage:
+
+`chronoclean tags list <source>`
+
+Options:
+
+- `--format [table|json]` — Output format (default: table)
+- `--config PATH` / `-c PATH` — Specify config file path
 
 Shows:
-- Meaningful folders (will become tags)
-- Junk folders (ignored), including reasons
-- Optional samples and counts
+- Tag candidates (meaningful folders that will become tags)
+- Ignored folders (and why: config ignore_list, too_short, etc.)
+- File counts and sample filenames per folder
 
-**tags classify**
+Example output:
 
-Persist a decision for a folder name.
+```
+Tag Candidates (will become tags):
+┏━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Folder Name    ┃ Formatted Tag ┃ Count   ┃ Sample Files          ┃
+┡━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━┩
+│ Paris 2024     │ Paris_2024    │ 45      │ IMG_001.jpg, ...      │
+│ Wedding Photos │ Wedding_Photos│ 120     │ DSC_0001.jpg, ...     │
+└────────────────┴───────────────┴─────────┴───────────────────────┘
 
-Usage: `chronoclean tags classify "<folder>" use|ignore|clear [--tag "<alias>"]`
+Ignored Folders:
+┏━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Folder Name ┃ Reason           ┃ Count   ┃ Sample Files          ┃
+┡━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━┩
+│ temp        │ config_ignore    │ 5       │ photo.jpg             │
+│ ab          │ too_short        │ 2       │ file.png              │
+└─────────────┴──────────────────┴─────────┴───────────────────────┘
+```
+
+### tags classify
+
+Persist a decision for a folder name in the tag rules store.
+
+Usage:
+
+`chronoclean tags classify "<folder>" <action> [options]`
+
+Actions:
+- `use` — Always use this folder name as a tag
+- `ignore` — Never use this folder name as a tag  
+- `clear` — Remove any stored decision for this folder
+
+Options:
+
+- `--tag ALIAS` — Use an alias instead of the folder name (with `use` action)
+- `--config PATH` / `-c PATH` — Specify config file path
 
 Examples:
-- `chronoclean tags classify "Paris 2022" use`
-- `chronoclean tags classify "Paris 2022" use --tag "ParisTrip"`
-- `chronoclean tags classify "tosort" ignore`
-- `chronoclean tags classify "Paris 2022" clear`
+
+```bash
+# Mark folder as a usable tag
+chronoclean tags classify "Paris 2022" use
+
+# Mark with an alias (Paris 2022 -> ParisTrip)
+chronoclean tags classify "Paris 2022" use --tag "ParisTrip"
+
+# Mark folder as ignored (won't become a tag)
+chronoclean tags classify "tosort" ignore
+
+# Clear a previous decision
+chronoclean tags classify "Paris 2022" clear
+```
+
+Tag rules are stored in `.chronoclean/tag_rules.yaml` and take precedence over
+config file settings and heuristic detection.
 
 Planned Commands (v0.5)
 =======================
@@ -329,6 +383,9 @@ Suggested CLI Behavior Summary
 
 **Today (implemented):**
 - Scan images: `chronoclean scan /path/to/photos`
+- List tag classifications: `chronoclean tags list <source>`
+- Classify folder name: `chronoclean tags classify "ParisTrip" use`
+- Ignore junk folder: `chronoclean tags classify "tosort" ignore`
 - Export report: `chronoclean export json`
 - Simulate: `chronoclean apply --dry-run <source> <dest>`
 - Apply: `chronoclean apply --rename --tag-names <source> <dest>`
@@ -338,11 +395,6 @@ Suggested CLI Behavior Summary
 **Planned (v0.5):**
 - Standalone dryrun: `chronoclean dryrun`
 - Show scan report: `chronoclean report scan`
-
-**Planned (v0.3.4):**
-- List tag classifications: `chronoclean tags list <source>`
-- Classify folder name: `chronoclean tags classify "ParisTrip" use`
-- Ignore junk folder: `chronoclean tags classify "tosort" ignore`
 
 **Desired (future):**
 - Auto-classify folders: `chronoclean tags auto <source>`

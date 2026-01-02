@@ -178,6 +178,52 @@ folder_tags:
   distance_threshold: 0.75    # Fuzzy match threshold (0-1)
 ```
 
+### Tag Rules Store (v0.3.4)
+
+In addition to config file settings, folder tag decisions can be persisted 
+using the `tags classify` command. These decisions are stored in 
+`.chronoclean/tag_rules.yaml` and take precedence over config settings.
+
+**File location:** `.chronoclean/tag_rules.yaml`
+
+**File format:**
+```yaml
+use:
+  - "Paris 2024"
+  - "Wedding Photos"
+ignore:
+  - "tosort"
+  - "temp"
+  - "misc"
+aliases:
+  "Paris 2024": "ParisTrip"
+  "Wedding Photos": "Wedding"
+```
+
+**Precedence (highest to lowest):**
+1. Tag rules store (`tag_rules.yaml`) — explicit user decisions
+2. Config force_list — always use as tags
+3. Config ignore_list — never use as tags
+4. Heuristic detection — automatic classification
+
+**Managing tag rules:**
+```bash
+# List current tag classifications
+chronoclean tags list /photos
+
+# Mark folder as usable tag
+chronoclean tags classify "Paris 2024" use
+
+# Mark with alias
+chronoclean tags classify "Paris 2024" use --tag "ParisTrip"
+
+# Mark as ignored
+chronoclean tags classify "temp" ignore
+
+# Clear a decision
+chronoclean tags classify "Paris 2024" clear
+```
+
 ### `renaming` — File Renaming Settings
 
 ```yaml
@@ -298,13 +344,41 @@ When `provider: "ffprobe"` and ffprobe is unavailable:
 export:
   default_format: "json"      # json, csv
   include_statistics: true    # Include summary stats in export
-  include_folder_tags: true   # Planned: include folder tag fields
+  include_folder_tags: true   # Include folder tag fields (v0.3.4)
   pretty_print: true          # Format JSON with indentation
   output_path: ".chronoclean/export"  # Default output directory
 ```
 
-> **Note:** `include_folder_tags` is reserved for future use. Currently folder tags
-> are detected but not included in export output.
+**Folder tag fields in export (v0.3.4):**
+
+When folder tags are enabled, the following fields are included in exports:
+
+| Field | Description |
+|-------|-------------|
+| `source_folder_name` | Original parent folder name |
+| `folder_tags` | Array of assigned tags (future: multi-tag support) |
+| `folder_tag_reasons` | Why each tag was assigned |
+| `folder_tag` | Primary tag (backward compatible) |
+| `folder_tag_reason` | Primary tag reason |
+| `folder_tag_usable` | Whether primary tag is usable |
+
+**Destination preview in export (v0.3.4):**
+
+Use `--destination` flag to compute and include proposed file destinations:
+
+```bash
+chronoclean export json --destination /photos/organized
+```
+
+This adds the following fields:
+
+| Field | Description |
+|-------|-------------|
+| `proposed_destination_folder` | Target folder path |
+| `proposed_filename` | Target filename |
+| `proposed_target_path` | Full target path |
+
+Use `--sample N` to limit export to N files for preview.
 
 ### `verify` — Verification & Cleanup Settings (v0.3.1)
 

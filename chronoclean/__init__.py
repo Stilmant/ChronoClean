@@ -5,5 +5,5 @@ A practical, conservative tool for reorganizing photo libraries into
 a clean, consistent chronological structure.
 """
 
-__version__ = "0.3.3"
+__version__ = "0.3.4"
 __author__ = "ChronoClean Contributors"

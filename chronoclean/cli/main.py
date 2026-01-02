@@ -17,6 +17,7 @@ from chronoclean.cli.doctor_cmd import register_doctor
 from chronoclean.cli.version_cmd import register_version
 from chronoclean.cli.config_cmd import create_config_app
 from chronoclean.cli.export_cmd import create_export_app
+from chronoclean.cli.tags_cmd import create_tags_app  # v0.3.4
 
 
 # Create main app
@@ -48,6 +49,7 @@ register_version(app)
 # Add sub-apps
 app.add_typer(create_config_app(), name="config")
 app.add_typer(create_export_app(), name="export")
+app.add_typer(create_tags_app(), name="tags")  # v0.3.4
 
 
 if __name__ == "__main__":
