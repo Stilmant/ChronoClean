@@ -19,6 +19,7 @@ from chronoclean.config.schema import (
 from chronoclean.core.models import DateSource, FileRecord, FileType, ScanResult
 
 os.environ["NO_COLOR"] = "1"
+os.environ["COLUMNS"] = "200"  # Wide terminal to prevent help text truncation
 os.environ.pop("FORCE_COLOR", None)
 os.environ.pop("CLICOLOR_FORCE", None)
 os.environ.pop("RICH_FORCE_TERMINAL", None)
