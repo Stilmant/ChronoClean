@@ -1,0 +1,39 @@
+name: Code quality guardrails
+
+on:
+  pull_request:
+  push:
+    branches: [ main ]
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install tools
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pylint radon jscpd
+
+      - name: Duplication check (jscpd)
+        run: |
+          npx --yes jscpd -c .jscpd.json .
+
+      - name: Structural lint (pylint – warnings only)
+        run: |
+          python -m pylint chronoclean \
+            --disable=all \
+            --enable=duplicate-code,too-many-locals,too-many-branches,too-many-statements \
+            || true
+
+      - name: Complexity report (radon)
+        run: |
+          python -m radon cc chronoclean -a
