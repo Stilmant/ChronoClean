@@ -1,5 +1,6 @@
 """Pytest configuration and shared fixtures for ChronoClean tests."""
 
+import os
 import shutil
 import tempfile
 from datetime import datetime
@@ -16,6 +17,8 @@ from chronoclean.config.schema import (
     SortingConfig,
 )
 from chronoclean.core.models import DateSource, FileRecord, FileType, ScanResult
+
+os.environ.setdefault("NO_COLOR", "1")
 
 
 # =============================================================================

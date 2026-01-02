@@ -324,15 +324,19 @@ class Verifier:
             source_ext = source_path.suffix.lower()
             source_size = source_path.stat().st_size
             size_tolerance = 0  # Exact size match for content search
+            source_resolved = source_path.resolve()
             
             candidates = []
             for candidate in search_root.rglob(f"*{source_ext}"):
-                if candidate.is_file():
-                    try:
-                        if abs(candidate.stat().st_size - source_size) <= size_tolerance:
-                            candidates.append(candidate)
-                    except OSError:
+                if not candidate.is_file():
+                    continue
+                try:
+                    if candidate.resolve() == source_resolved:
                         continue
+                    if abs(candidate.stat().st_size - source_size) <= size_tolerance:
+                        candidates.append(candidate)
+                except OSError:
+                    continue
             
             if not candidates:
                 return VerifyEntry(
