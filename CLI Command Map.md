@@ -173,6 +173,34 @@ Safeguards:
 - Keeps backups in `.chronoclean/backups/` (if enabled)
 - Duplicate handling occurs during apply based on `duplicates.on_collision` config
 
+Planned Commands (v0.3.4)
+=========================
+
+The following commands are planned for folder tag analysis and management.
+
+**tags list**
+
+List folder-tag classification from a scan.
+
+Usage: `chronoclean tags list <source>`
+
+Shows:
+- Meaningful folders (will become tags)
+- Junk folders (ignored), including reasons
+- Optional samples and counts
+
+**tags classify**
+
+Persist a decision for a folder name.
+
+Usage: `chronoclean tags classify "<folder>" use|ignore|clear [--tag "<alias>"]`
+
+Examples:
+- `chronoclean tags classify "Paris 2022" use`
+- `chronoclean tags classify "Paris 2022" use --tag "ParisTrip"`
+- `chronoclean tags classify "tosort" ignore`
+- `chronoclean tags classify "Paris 2022" clear`
+
 Planned Commands (v0.5)
 =======================
 
@@ -185,35 +213,14 @@ Planned Commands (v0.5)
 Desired Commands (Future)
 =========================
 
-The following commands are desired features for folder tag analysis and management.
+The following commands are desired features for future tag automation.
 Version TBD based on roadmap prioritization.
-
-**tags list**
-
-List folder-tag classification.
-
-Usage: `chronoclean tags list`
-
-Shows:
-- Meaningful folders (will become tags)
-- Junk folders (ignored)
-- Unclassified folders
-
-**tags classify**
-
-Manual classification of a folder name.
-
-Usage: `chronoclean tags classify "<folder>" <action>`
-
-Examples:
-- `chronoclean tags classify "Paris 2022" use` — Mark as meaningful tag
-- `chronoclean tags classify "tosort" ignore` — Mark as junk/ignored
 
 **tags auto**
 
 Automatically classify folders using heuristics.
 
-Usage: `chronoclean tags auto`
+Usage: `chronoclean tags auto <source>`
 
 Heuristics include:
 - String patterns (`misc`, `temp`, `backup`, `DCIM`)
@@ -332,7 +339,10 @@ Suggested CLI Behavior Summary
 - Standalone dryrun: `chronoclean dryrun`
 - Show scan report: `chronoclean report scan`
 
-**Desired (future):**
+**Planned (v0.3.4):**
+- List tag classifications: `chronoclean tags list <source>`
 - Classify folder name: `chronoclean tags classify "ParisTrip" use`
 - Ignore junk folder: `chronoclean tags classify "tosort" ignore`
-- List tag classifications: `chronoclean tags list`
+
+**Desired (future):**
+- Auto-classify folders: `chronoclean tags auto <source>`

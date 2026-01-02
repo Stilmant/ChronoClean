@@ -1,6 +1,6 @@
 # ChronoClean
 
-![Status](https://img.shields.io/badge/status-v0.3.2_prototype-blue)
+![Status](https://img.shields.io/badge/status-v0.3.3_prototype-blue)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Platform](https://img.shields.io/badge/platform-SynologyNAS-lightgrey)
