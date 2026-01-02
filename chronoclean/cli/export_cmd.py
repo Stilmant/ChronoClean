@@ -10,6 +10,7 @@ from chronoclean.config import ConfigLoader
 from chronoclean.config.schema import ChronoCleanConfig
 from chronoclean.cli._common import console
 from chronoclean.cli.helpers import (
+    build_renamer_context,
     create_scan_components,
     validate_source_dir,
     resolve_bool,
@@ -129,18 +130,8 @@ def _compute_proposed_destinations(
         folder_structure=folder_structure,
     )
     
-    # Create renamer if needed
-    renamer = None
-    conflict_resolver = None
-    if use_rename:
-        renamer = Renamer(
-            pattern=cfg.renaming.pattern,
-            date_format=cfg.renaming.date_format,
-            time_format=cfg.renaming.time_format,
-            tag_format=cfg.renaming.tag_part_format,
-            lowercase_ext=cfg.renaming.lowercase_extensions,
-        )
-        conflict_resolver = ConflictResolver(renamer)
+    # Create renamer if needed (uses shared helper)
+    renamer, conflict_resolver = build_renamer_context(cfg, use_rename)
     
     # Compute destinations
     count = 0
@@ -185,6 +176,24 @@ def _compute_proposed_destinations(
 
 def _print_plain(output: str) -> None:
     print(output, end="")
+
+
+def _resolve_export_options(
+    config: Optional[Path],
+    rename: Optional[bool],
+    tag_names: Optional[bool],
+    structure: Optional[str],
+) -> tuple[ChronoCleanConfig, bool, bool, str]:
+    """Resolve export command options from CLI args and config.
+    
+    Returns:
+        Tuple of (config, use_rename, use_tag_names, folder_structure)
+    """
+    cfg = get_config(config)
+    use_rename = resolve_bool(rename, cfg.renaming.enabled)
+    use_tag_names = resolve_bool(tag_names, cfg.folder_tags.enabled)
+    folder_structure = structure or cfg.sorting.folder_structure
+    return cfg, use_rename, use_tag_names, folder_structure
 
 
 def _run_export(
@@ -268,12 +277,9 @@ def create_export_app() -> typer.Typer:
         
         v0.3.4: Use --destination to compute proposed target paths.
         """
-        cfg = get_config(config)
-        
-        # Resolve destination-related options
-        use_rename = resolve_bool(rename, cfg.renaming.enabled)
-        use_tag_names = resolve_bool(tag_names, cfg.folder_tags.enabled)
-        folder_structure = structure or cfg.sorting.folder_structure
+        cfg, use_rename, use_tag_names, folder_structure = _resolve_export_options(
+            config, rename, tag_names, structure
+        )
         
         exporter = Exporter(
             include_statistics=statistics,
@@ -318,12 +324,9 @@ def create_export_app() -> typer.Typer:
         
         v0.3.4: Use --destination to compute proposed target paths.
         """
-        cfg = get_config(config)
-        
-        # Resolve destination-related options
-        use_rename = resolve_bool(rename, cfg.renaming.enabled)
-        use_tag_names = resolve_bool(tag_names, cfg.folder_tags.enabled)
-        folder_structure = structure or cfg.sorting.folder_structure
+        cfg, use_rename, use_tag_names, folder_structure = _resolve_export_options(
+            config, rename, tag_names, structure
+        )
         
         # Use stderr console for status messages when outputting to stdout
         stderr_console = Console(stderr=True)
