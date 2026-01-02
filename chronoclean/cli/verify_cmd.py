@@ -14,9 +14,10 @@ from chronoclean.cli.helpers import (
     create_scan_components,
     validate_source_dir,
     resolve_bool,
+    build_renamer_context,
+    compute_destination_for_record,
 )
 from chronoclean.core.sorter import Sorter
-from chronoclean.core.renamer import Renamer, ConflictResolver
 from chronoclean.core.run_record_writer import ensure_verifications_dir
 from chronoclean.core.run_discovery import (
     discover_run_records,
@@ -260,17 +261,7 @@ def _verify_reconstruct(source: Optional[Path], destination: Optional[Path], alg
     use_rename = cfg.renaming.enabled
     use_tag_names = cfg.folder_tags.enabled
     
-    renamer = None
-    conflict_resolver = None
-    if use_rename:
-        renamer = Renamer(
-            pattern=cfg.renaming.pattern,
-            date_format=cfg.renaming.date_format,
-            time_format=cfg.renaming.time_format,
-            tag_format=cfg.renaming.tag_part_format,
-            lowercase_ext=cfg.renaming.lowercase_extensions,
-        )
-        conflict_resolver = ConflictResolver(renamer)
+    renamer, conflict_resolver = build_renamer_context(cfg, use_rename)
     
     # Build expected mappings: [(source_path, expected_dest_path)]
     expected_mappings: list[tuple[Path, Path]] = []
@@ -281,25 +272,15 @@ def _verify_reconstruct(source: Optional[Path], destination: Optional[Path], alg
             skipped_no_date += 1
             continue
         
-        dest_folder = sorter.compute_destination_folder(record.detected_date)
-        
-        new_filename = None
-        if use_rename and renamer and conflict_resolver:
-            tag = record.folder_tag if use_tag_names and record.folder_tag_usable else None
-            new_filename = conflict_resolver.resolve(
-                record.source_path,
-                record.detected_date,
-                tag=tag,
-            )
-        elif use_tag_names and record.folder_tag_usable and record.folder_tag:
-            if not renamer:
-                renamer = Renamer(lowercase_ext=cfg.renaming.lowercase_extensions)
-            new_filename = renamer.generate_filename_tag_only(
-                record.source_path,
-                record.folder_tag,
-            )
-        else:
-            new_filename = record.source_path.name
+        dest_folder, new_filename, renamer = compute_destination_for_record(
+            record,
+            sorter,
+            cfg,
+            use_rename=use_rename,
+            use_tag_names=use_tag_names,
+            renamer=renamer,
+            conflict_resolver=conflict_resolver,
+        )
         
         expected_dest = dest_folder / new_filename
         expected_mappings.append((record.source_path, expected_dest))

@@ -1,23 +1,46 @@
 """Export commands for ChronoClean CLI."""
 
 from pathlib import Path
-from typing import Optional
+from typing import Annotated, Callable, Optional
 
 import typer
+from rich.console import Console
 
 from chronoclean.config import ConfigLoader
 from chronoclean.config.schema import ChronoCleanConfig
-from chronoclean.cli._common import (
-    console,
-    _default_cfg,
-    bool_show_default,
-)
+from chronoclean.cli._common import console
 from chronoclean.cli.helpers import (
     create_scan_components,
     validate_source_dir,
     resolve_bool,
 )
+from chronoclean.cli.options import (
+    SourceScanArg,
+    RecursiveOpt,
+    VideosOpt,
+    LimitOpt,
+    ConfigOpt,
+)
 from chronoclean.core.exporter import Exporter
+
+OutputOpt = Annotated[
+    Optional[Path],
+    typer.Option("--output", "-o", help="Output file path (default: stdout)"),
+]
+StatisticsOpt = Annotated[
+    bool,
+    typer.Option(
+        "--statistics/--no-statistics",
+        help="Include summary statistics",
+    ),
+]
+PrettyOpt = Annotated[
+    bool,
+    typer.Option(
+        "--pretty/--compact",
+        help="Pretty print JSON output",
+    ),
+]
 
 
 def _perform_scan(
@@ -47,6 +70,39 @@ def _perform_scan(
     return result
 
 
+def _print_plain(output: str) -> None:
+    print(output, end="")
+
+
+def _run_export(
+    *,
+    source: Path,
+    output: Optional[Path],
+    recursive: Optional[bool],
+    videos: Optional[bool],
+    limit: Optional[int],
+    config: Optional[Path],
+    status_console: Console,
+    export_fn: Callable[[object, Optional[Path]], str],
+    output_writer: Callable[[str], None],
+) -> None:
+    cfg = ConfigLoader.load(config)
+    
+    status_console.print(f"[blue]Scanning:[/blue] {source}")
+    if config:
+        status_console.print(f"[dim]Config: {config}[/dim]")
+    status_console.print()
+    
+    result = _perform_scan(source, cfg, recursive, videos, limit)
+    output_str = export_fn(result, output)
+    
+    if output:
+        status_console.print(f"[green]Exported to:[/green] {output}")
+        status_console.print(f"[dim]Files: {len(result.files)}[/dim]")
+    else:
+        output_writer(output_str)
+
+
 def create_export_app() -> typer.Typer:
     """Create and return the export sub-app with all commands registered."""
     
@@ -58,37 +114,14 @@ def create_export_app() -> typer.Typer:
 
     @export_app.command("json")
     def export_json(
-        source: Path = typer.Argument(..., help="Source directory to scan"),
-        output: Optional[Path] = typer.Option(
-            None, "--output", "-o",
-            help="Output file path (default: stdout)",
-        ),
-        recursive: Optional[bool] = typer.Option(
-            None, "--recursive/--no-recursive",
-            help="Scan subfolders",
-            show_default=bool_show_default(_default_cfg.general.recursive, "recursive", "no-recursive"),
-        ),
-        videos: Optional[bool] = typer.Option(
-            None, "--videos/--no-videos",
-            help="Include video files",
-            show_default=bool_show_default(_default_cfg.general.include_videos, "videos", "no-videos"),
-        ),
-        limit: Optional[int] = typer.Option(
-            None, "--limit", "-l",
-            help="Limit files (for debugging)",
-        ),
-        statistics: bool = typer.Option(
-            True, "--statistics/--no-statistics",
-            help="Include summary statistics",
-        ),
-        pretty: bool = typer.Option(
-            True, "--pretty/--compact",
-            help="Pretty print JSON output",
-        ),
-        config: Optional[Path] = typer.Option(
-            None, "--config", "-c",
-            help="Config file path",
-        ),
+        source: SourceScanArg,
+        output: OutputOpt = None,
+        recursive: RecursiveOpt = None,
+        videos: VideosOpt = None,
+        limit: LimitOpt = None,
+        statistics: StatisticsOpt = True,
+        pretty: PrettyOpt = True,
+        config: ConfigOpt = None,
     ):
         """
         Export scan results to JSON format.
@@ -96,58 +129,30 @@ def create_export_app() -> typer.Typer:
         Scans the source directory and exports the results to JSON.
         By default outputs to stdout; use --output to write to a file.
         """
-        # Load configuration
-        cfg = ConfigLoader.load(config)
-        
-        console.print(f"[blue]Scanning:[/blue] {source}")
-        if config:
-            console.print(f"[dim]Config: {config}[/dim]")
-        console.print()
-        
-        # Perform scan
-        result = _perform_scan(source, cfg, recursive, videos, limit)
-        
-        # Create exporter
         exporter = Exporter(
             include_statistics=statistics,
             pretty_print=pretty,
         )
-        
-        # Export
-        json_str = exporter.to_json(result, output)
-        
-        if output:
-            console.print(f"[green]Exported to:[/green] {output}")
-            console.print(f"[dim]Files: {len(result.files)}[/dim]")
-        else:
-            # Output to stdout
-            console.print(json_str)
+        _run_export(
+            source=source,
+            output=output,
+            recursive=recursive,
+            videos=videos,
+            limit=limit,
+            config=config,
+            status_console=console,
+            export_fn=exporter.to_json,
+            output_writer=console.print,
+        )
 
     @export_app.command("csv")
     def export_csv(
-        source: Path = typer.Argument(..., help="Source directory to scan"),
-        output: Optional[Path] = typer.Option(
-            None, "--output", "-o",
-            help="Output file path (default: stdout)",
-        ),
-        recursive: Optional[bool] = typer.Option(
-            None, "--recursive/--no-recursive",
-            help="Scan subfolders",
-            show_default=bool_show_default(_default_cfg.general.recursive, "recursive", "no-recursive"),
-        ),
-        videos: Optional[bool] = typer.Option(
-            None, "--videos/--no-videos",
-            help="Include video files",
-            show_default=bool_show_default(_default_cfg.general.include_videos, "videos", "no-videos"),
-        ),
-        limit: Optional[int] = typer.Option(
-            None, "--limit", "-l",
-            help="Limit files (for debugging)",
-        ),
-        config: Optional[Path] = typer.Option(
-            None, "--config", "-c",
-            help="Config file path",
-        ),
+        source: SourceScanArg,
+        output: OutputOpt = None,
+        recursive: RecursiveOpt = None,
+        videos: VideosOpt = None,
+        limit: LimitOpt = None,
+        config: ConfigOpt = None,
     ):
         """
         Export scan results to CSV format.
@@ -155,34 +160,19 @@ def create_export_app() -> typer.Typer:
         Scans the source directory and exports the results to CSV.
         By default outputs to stdout; use --output to write to a file.
         """
-        import sys
-        from rich.console import Console
-        
         # Use stderr console for status messages when outputting to stdout
         stderr_console = Console(stderr=True)
-        
-        # Load configuration
-        cfg = ConfigLoader.load(config)
-        
-        stderr_console.print(f"[blue]Scanning:[/blue] {source}")
-        if config:
-            stderr_console.print(f"[dim]Config: {config}[/dim]")
-        stderr_console.print()
-        
-        # Perform scan
-        result = _perform_scan(source, cfg, recursive, videos, limit)
-        
-        # Create exporter
         exporter = Exporter()
-        
-        # Export
-        csv_str = exporter.to_csv(result, output)
-        
-        if output:
-            stderr_console.print(f"[green]Exported to:[/green] {output}")
-            stderr_console.print(f"[dim]Files: {len(result.files)}[/dim]")
-        else:
-            # Output to stdout (without rich formatting)
-            print(csv_str, end="")
+        _run_export(
+            source=source,
+            output=output,
+            recursive=recursive,
+            videos=videos,
+            limit=limit,
+            config=config,
+            status_console=stderr_console,
+            export_fn=exporter.to_csv,
+            output_writer=_print_plain,
+        )
 
     return export_app

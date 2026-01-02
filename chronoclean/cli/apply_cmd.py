@@ -18,9 +18,11 @@ from chronoclean.cli.helpers import (
     validate_source_dir,
     validate_destination_dir,
     resolve_bool,
+    build_renamer_context,
+    compute_destination_for_record,
 )
+from chronoclean.cli.options import RecursiveOpt, VideosOpt, ConfigOpt
 from chronoclean.core.sorter import Sorter
-from chronoclean.core.renamer import Renamer, ConflictResolver
 from chronoclean.core.file_operations import FileOperations, BatchOperations, FileOperationError
 from chronoclean.core.models import OperationPlan
 from chronoclean.core.duplicate_checker import DuplicateChecker
@@ -50,16 +52,8 @@ def register_apply(app: typer.Typer) -> None:
             help="Add folder tags to filenames (works with or without --rename)",
             show_default=bool_show_default(_default_cfg.folder_tags.enabled, "tag-names", "no-tag-names"),
         ),
-        recursive: Optional[bool] = typer.Option(
-            None, "--recursive/--no-recursive",
-            help="Scan subfolders",
-            show_default=bool_show_default(_default_cfg.general.recursive, "recursive", "no-recursive"),
-        ),
-        videos: Optional[bool] = typer.Option(
-            None, "--videos/--no-videos",
-            help="Include video files",
-            show_default=bool_show_default(_default_cfg.general.include_videos, "videos", "no-videos"),
-        ),
+        recursive: RecursiveOpt = None,
+        videos: VideosOpt = None,
         structure: Optional[str] = typer.Option(
             None, "--structure", "-s",
             help="Folder structure",
@@ -67,7 +61,7 @@ def register_apply(app: typer.Typer) -> None:
         ),
         force: bool = typer.Option(False, "--force", "-f", help="Skip confirmation"),
         limit: Optional[int] = typer.Option(None, "--limit", "-l", help="Limit files"),
-        config: Optional[Path] = typer.Option(None, "--config", "-c", help="Config file path"),
+        config: ConfigOpt = None,
         no_run_record: bool = typer.Option(
             False, "--no-run-record",
             help="Disable writing apply run record (v0.3.1)",
@@ -139,18 +133,7 @@ def register_apply(app: typer.Typer) -> None:
         console.print("[blue]Building operation plan...[/blue]")
         sorter = Sorter(destination, folder_structure=use_structure)
         
-        # Configure renamer from config
-        renamer = None
-        conflict_resolver = None
-        if use_rename:
-            renamer = Renamer(
-                pattern=cfg.renaming.pattern,
-                date_format=cfg.renaming.date_format,
-                time_format=cfg.renaming.time_format,
-                tag_format=cfg.renaming.tag_part_format,
-                lowercase_ext=cfg.renaming.lowercase_extensions,
-            )
-            conflict_resolver = ConflictResolver(renamer)
+        renamer, conflict_resolver = build_renamer_context(cfg, use_rename)
 
         plan = OperationPlan()
         files_with_dates = 0
@@ -164,31 +147,15 @@ def register_apply(app: typer.Typer) -> None:
 
             files_with_dates += 1
 
-            # Compute destination
-            dest_folder = sorter.compute_destination_folder(record.detected_date)
-
-            # Determine filename
-            new_filename = None
-            if use_rename and renamer and conflict_resolver:
-                # Full rename mode: use date pattern with optional tag
-                tag = record.folder_tag if use_tag_names and record.folder_tag_usable else None
-                new_filename = conflict_resolver.resolve(
-                    record.source_path,
-                    record.detected_date,
-                    tag=tag,
-                )
-            elif use_tag_names and record.folder_tag_usable and record.folder_tag:
-                # v0.3: Tag-only mode - preserve original filename, append tag
-                # Need a renamer instance for tag formatting
-                if not renamer:
-                    renamer = Renamer(lowercase_ext=cfg.renaming.lowercase_extensions)
-                new_filename = renamer.generate_filename_tag_only(
-                    record.source_path,
-                    record.folder_tag,
-                )
-            else:
-                # No rename, no tag - keep original filename
-                new_filename = record.source_path.name
+            dest_folder, new_filename, renamer = compute_destination_for_record(
+                record,
+                sorter,
+                cfg,
+                use_rename=use_rename,
+                use_tag_names=use_tag_names,
+                renamer=renamer,
+                conflict_resolver=conflict_resolver,
+            )
 
             # Add to plan
             plan.add_move(

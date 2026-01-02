@@ -16,7 +16,10 @@ from chronoclean.config.schema import ChronoCleanConfig
 from chronoclean.core.date_inference import DateInferenceEngine
 from chronoclean.core.exif_reader import ExifReader
 from chronoclean.core.folder_tagger import FolderTagger
+from chronoclean.core.models import FileRecord
+from chronoclean.core.renamer import ConflictResolver, Renamer
 from chronoclean.core.scanner import Scanner
+from chronoclean.core.sorter import Sorter
 from chronoclean.core.video_metadata import VideoMetadataReader
 
 
@@ -240,3 +243,56 @@ def resolve_bool(cli_value: Optional[bool], config_value: bool) -> bool:
         CLI value if provided, otherwise config value
     """
     return config_value if cli_value is None else cli_value
+
+
+def build_renamer_context(
+    cfg: ChronoCleanConfig,
+    use_rename: bool,
+) -> tuple[Optional[Renamer], Optional[ConflictResolver]]:
+    """Create renamer and conflict resolver based on config and flags."""
+    if not use_rename:
+        return None, None
+
+    renamer = Renamer(
+        pattern=cfg.renaming.pattern,
+        date_format=cfg.renaming.date_format,
+        time_format=cfg.renaming.time_format,
+        tag_format=cfg.renaming.tag_part_format,
+        lowercase_ext=cfg.renaming.lowercase_extensions,
+    )
+    conflict_resolver = ConflictResolver(renamer)
+    return renamer, conflict_resolver
+
+
+def compute_destination_for_record(
+    record: FileRecord,
+    sorter: Sorter,
+    cfg: ChronoCleanConfig,
+    *,
+    use_rename: bool,
+    use_tag_names: bool,
+    renamer: Optional[Renamer],
+    conflict_resolver: Optional[ConflictResolver],
+) -> tuple[Path, str, Optional[Renamer]]:
+    """Compute destination folder and filename for a file record."""
+    dest_folder = sorter.compute_destination_folder(record.detected_date)
+
+    new_filename = None
+    if use_rename and renamer and conflict_resolver:
+        tag = record.folder_tag if use_tag_names and record.folder_tag_usable else None
+        new_filename = conflict_resolver.resolve(
+            record.source_path,
+            record.detected_date,
+            tag=tag,
+        )
+    elif use_tag_names and record.folder_tag_usable and record.folder_tag:
+        if not renamer:
+            renamer = Renamer(lowercase_ext=cfg.renaming.lowercase_extensions)
+        new_filename = renamer.generate_filename_tag_only(
+            record.source_path,
+            record.folder_tag,
+        )
+    else:
+        new_filename = record.source_path.name
+
+    return dest_folder, new_filename, renamer

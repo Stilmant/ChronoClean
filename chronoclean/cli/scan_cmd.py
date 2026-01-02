@@ -1,21 +1,21 @@
 """Scan command for ChronoClean CLI."""
 
-from pathlib import Path
-from typing import Optional
-
 import typer
 from rich.table import Table
 
 from chronoclean.config import ConfigLoader
-from chronoclean.cli._common import (
-    console,
-    _default_cfg,
-    bool_show_default,
-)
+from chronoclean.cli._common import console
 from chronoclean.cli.helpers import (
     create_scan_components,
     validate_source_dir,
     resolve_bool,
+)
+from chronoclean.cli.options import (
+    SourceScanArg,
+    RecursiveOpt,
+    VideosOpt,
+    LimitOpt,
+    ConfigOpt,
 )
 
 
@@ -24,19 +24,11 @@ def register_scan(app: typer.Typer) -> None:
 
     @app.command()
     def scan(
-        source: Path = typer.Argument(..., help="Source directory to scan"),
-        recursive: Optional[bool] = typer.Option(
-            None, "--recursive/--no-recursive",
-            help="Scan subfolders",
-            show_default=bool_show_default(_default_cfg.general.recursive, "recursive", "no-recursive"),
-        ),
-        videos: Optional[bool] = typer.Option(
-            None, "--videos/--no-videos",
-            help="Include video files",
-            show_default=bool_show_default(_default_cfg.general.include_videos, "videos", "no-videos"),
-        ),
-        limit: Optional[int] = typer.Option(None, "--limit", "-l", help="Limit files (for debugging)"),
-        config: Optional[Path] = typer.Option(None, "--config", "-c", help="Config file path"),
+        source: SourceScanArg,
+        recursive: RecursiveOpt = None,
+        videos: VideosOpt = None,
+        limit: LimitOpt = None,
+        config: ConfigOpt = None,
         report: bool = typer.Option(False, "--report", "-r", help="Show detailed per-file report"),
     ):
         """
