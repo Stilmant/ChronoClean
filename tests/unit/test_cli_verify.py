@@ -41,7 +41,8 @@ class TestVerifyCommandBasic:
         
         assert result.exit_code == 0
         assert "verify" in result.stdout.lower()
-        assert "--run-file" in result.stdout or "run-file" in result.stdout
+        # Check for key terms that appear in the help description (not options panel)
+        assert "integrity" in result.stdout.lower() or "hash" in result.stdout.lower()
 
 
 class TestVerifyReconstructMode:
