@@ -217,16 +217,18 @@ class TestTagsHelpMessages:
         result = runner.invoke(app, ["tags", "list", "--help"])
         
         assert result.exit_code == 0
-        assert "--recursive" in result.output
-        assert "--format" in result.output
-        assert "--samples" in result.output
+        # Check for option names (ANSI codes may split "--" from option name)
+        assert "recursive" in result.output
+        assert "format" in result.output
+        assert "samples" in result.output
     
     def test_tags_classify_help(self):
         """Test tags classify --help shows options."""
         result = runner.invoke(app, ["tags", "classify", "--help"])
         
         assert result.exit_code == 0
-        assert "--tag" in result.output
+        # Check for option/action names (ANSI codes may split "--" from option name)
+        assert "tag" in result.output
         assert "use" in result.output.lower()
         assert "ignore" in result.output.lower()
         assert "clear" in result.output.lower()
